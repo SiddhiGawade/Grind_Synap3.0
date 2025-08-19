@@ -402,11 +402,28 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
 
   return (
     <motion.div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-primary flex items-center justify-center z-50 p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(var(--border-color) 1px, transparent 1px)',
+          backgroundSize: '24px 24px'
+        }}></div>
+      </div>
+      
+      {/* Decorative Elements */}
+      <div className="absolute top-20 left-10 w-20 h-20 rounded-full blur-xl" style={{
+        backgroundColor: 'var(--bg-secondary)',
+        opacity: 0.3
+      }}></div>
+      <div className="absolute bottom-20 right-16 w-32 h-32 rounded-full blur-xl" style={{
+        backgroundColor: 'var(--bg-accent)',
+        opacity: 0.3
+      }}></div>
       <motion.div
         className="modal-content bg-primary p-6 rounded-2xl shadow-lg w-full max-w-3xl border-2 border-themed relative my-8 max-h-[85vh] overflow-y-auto"
         initial={{ scale: 0.9, y: 50 }}
