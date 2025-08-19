@@ -149,6 +149,28 @@ async function writeEvents(events) {
   await fs.writeFile(EVENTS_FILE, JSON.stringify(events, null, 2));
 }
 
+// Unified event lookup: use Supabase when available, otherwise read from file
+async function findEventByIdOrCode(id) {
+  if (!id) return null;
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin.from('events')
+        .select('*')
+        .or(`id.eq.${id},eventCode.eq.${String(id).toUpperCase()}`)
+        .limit(1)
+        .single();
+      if (error) return null;
+      return data || null;
+    } catch (e) {
+      console.warn('Supabase event lookup failed', e);
+      return null;
+    }
+  }
+
+  const events = await readEvents();
+  return events.find(e => e.id === id || (e.eventCode && e.eventCode.toUpperCase() === String(id).toUpperCase())) || null;
+}
+
 // Small helper to generate a short human-friendly event code
 function generateEventCode(len = 6) {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // avoid confusing chars
@@ -302,9 +324,7 @@ app.post('/api/auth/signin', async (req, res) => {
 
           // If judge role and eventId provided, validate authorized judges for that event
           if (role === 'judge' && eventId) {
-            const events = await readEvents();
-            // Look up event by ID or eventCode
-            const ev = events.find(e => e.id === String(eventId) || e.eventCode === String(eventId).toUpperCase());
+            const ev = await findEventByIdOrCode(String(eventId));
             if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
             const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
             if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
@@ -323,9 +343,7 @@ app.post('/api/auth/signin', async (req, res) => {
         }
         // If judge role and eventId provided, validate authorizedJudges
         if (role === 'judge' && eventId) {
-          const events = await readEvents();
-          // Look up event by ID or eventCode
-          const ev = events.find(e => e.id === String(eventId) || e.eventCode === String(eventId).toUpperCase());
+          const ev = await findEventByIdOrCode(String(eventId));
           if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
           const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
           if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
@@ -364,9 +382,7 @@ app.post('/api/auth/signin', async (req, res) => {
 
     // If judge role and eventId provided, validate authorized judges for that event
     if (role === 'judge' && eventId) {
-      const events = await readEvents();
-      // Look up event by ID or eventCode
-      const ev = events.find(e => e.id === String(eventId) || e.eventCode === String(eventId).toUpperCase());
+      const ev = await findEventByIdOrCode(String(eventId));
       if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
       const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
       if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
@@ -498,98 +514,185 @@ app.get('/api/judges', async (req, res) => {
   }
 });
 
-// Simple events creation endpoint (file-backed fallback). If Supabase is configured,
-// you can extend this to insert into a Supabase table instead.
+// --- replace the POST /api/events, GET /api/events, PUT/DELETE, validate-judge, announcements endpoints
+// with versions that use supabase when available, otherwise fallback to file-based storage:
+
+// Create event (Supabase if configured)
 app.post('/api/events', async (req, res) => {
   try {
     const data = req.body || {};
-    // Basic validation
     if (!data.eventTitle || !data.name || !data.email) {
       return res.status(400).json({ error: 'Missing required fields: eventTitle, name, email' });
     }
 
-    const events = await readEvents();
-    // generate a unique eventCode (try a few times to avoid collision)
-    let code = generateEventCode(6);
-    const existingCodes = new Set(events.map(e => (e.eventCode || '').toUpperCase()));
-    let attempts = 0;
-    while (existingCodes.has(code) && attempts < 10) {
-      code = generateEventCode(6);
-      attempts++;
-    }
-
-    const newEvent = {
+    // Normalize fields
+    const eventPayload = {
       id: Date.now().toString(),
-      ...data,
-      announcements: Array.isArray(data.announcements) ? data.announcements : [],
-      // Persist mentor/judge info
+      name: data.name,
+      email: data.email,
+      aadhar: data.aadhar || null,
+      organization: data.organization || null,
+      designation: data.designation || null,
+      eventTitle: data.eventTitle,
+      eventDescription: data.eventDescription || null,
+      startDate: data.startDate || null,
+      endDate: data.endDate || null,
       numberOfMentors: typeof data.numberOfMentors === 'number' ? data.numberOfMentors : (Number(data.numberOfMentors) || 0),
       authorizedJudges: Array.isArray(data.authorizedJudges) ? data.authorizedJudges : (Array.isArray(data.judgeEmails) ? data.judgeEmails : []),
-      eventCode: (data.eventCode && String(data.eventCode).trim()) ? String(data.eventCode).trim() : code,
+      announcements: Array.isArray(data.announcements) ? data.announcements : [],
       createdAt: new Date().toISOString()
     };
-    events.push(newEvent);
-    await writeEvents(events);
 
-    return res.status(201).json({ message: 'Event created', event: newEvent });
+    // generate eventCode if not provided
+    let code = (data.eventCode && String(data.eventCode).trim()) ? String(data.eventCode).trim() : generateEventCode(6);
+
+    if (supabaseAdmin) {
+      // ensure uniqueness of code
+      let attempts = 0;
+      const existingCodes = new Set((await supabaseAdmin.from('events').select('eventCode')).data?.map(r => (r.eventCode || '').toUpperCase()) || []);
+      while (existingCodes.has(code.toUpperCase()) && attempts < 10) {
+        code = generateEventCode(6);
+        attempts++;
+      }
+
+      const insertPayload = { ...eventPayload, eventCode: code, authorizedJudges: eventPayload.authorizedJudges };
+      const { data: created, error } = await supabaseAdmin.from('events').insert(insertPayload).select().single();
+      if (error) {
+        console.error('Supabase insert event error', error);
+        return res.status(500).json({ error: 'Failed to create event' });
+      }
+      return res.status(201).json({ message: 'Event created', event: created });
+    } else {
+      // fallback file-backed
+      const events = await readEvents();
+      const existingCodes = new Set(events.map(e => (e.eventCode || '').toUpperCase()));
+      let attempts = 0;
+      while (existingCodes.has(code.toUpperCase()) && attempts < 10) {
+        code = generateEventCode(6);
+        attempts++;
+      }
+      const newEvent = { id: eventPayload.id, ...eventPayload, eventCode: code };
+      events.push(newEvent);
+      await writeEvents(events);
+      return res.status(201).json({ message: 'Event created', event: newEvent });
+    }
   } catch (err) {
     console.error('Failed to create event', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });
 
+// Get events
 app.get('/api/events', async (req, res) => {
   try {
-    const events = await readEvents();
-    return res.json(events);
+    if (supabaseAdmin) {
+      const { data, error } = await supabaseAdmin.from('events').select('*').order('createdAt', { ascending: false });
+      if (error) {
+        console.error('Supabase fetch events error', error);
+        return res.status(500).json({ error: 'Failed to fetch events' });
+      }
+      return res.json(data || []);
+    } else {
+      const events = await readEvents();
+      return res.json(events);
+    }
   } catch (err) {
     console.error('Failed to read events', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Update an event
+// Update event
 app.put('/api/events/:id', async (req, res) => {
   try {
     const id = req.params.id;
     const payload = req.body || {};
-    const events = await readEvents();
-    const idx = events.findIndex((e) => e.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Event not found' });
-    // Merge fields but keep id and createdAt
-    const existing = events[idx];
-  // Preserve announcements unless payload explicitly sends announcements
-  const announcements = Array.isArray(payload.announcements) ? payload.announcements : existing.announcements || [];
-  const updated = { ...existing, ...payload, id: existing.id, createdAt: existing.createdAt, announcements };
-  // Normalize mentor/judge fields
-  updated.numberOfMentors = typeof payload.numberOfMentors === 'number' ? payload.numberOfMentors : (Number(payload.numberOfMentors) || updated.numberOfMentors || 0);
-  updated.authorizedJudges = Array.isArray(payload.authorizedJudges) ? payload.authorizedJudges : (payload.judgeEmails ? payload.judgeEmails : updated.authorizedJudges || []);
-  // Preserve existing eventCode unless payload explicitly provides one
-  if (payload.eventCode && String(payload.eventCode).trim()) {
-    updated.eventCode = String(payload.eventCode).trim();
-  } else {
-    updated.eventCode = existing.eventCode || existing.eventCode === 0 ? existing.eventCode : existing.eventCode;
-  }
-    events[idx] = updated;
-    await writeEvents(events);
-    return res.json({ message: 'Event updated', event: updated });
+
+    if (supabaseAdmin) {
+      // Merge update (we'll return updated row)
+      const updatePayload = {
+        ...payload,
+        numberOfMentors: typeof payload.numberOfMentors === 'number' ? payload.numberOfMentors : (payload.numberOfMentors ? Number(payload.numberOfMentors) : undefined)
+      };
+      // prevent accidentally removing createdAt
+      delete updatePayload.createdAt;
+
+      const { data: updated, error } = await supabaseAdmin.from('events').update(updatePayload).eq('id', id).select().single();
+      if (error) {
+        console.error('Supabase update event error', error);
+        return res.status(500).json({ error: 'Failed to update event' });
+      }
+      return res.json({ message: 'Event updated', event: updated });
+    } else {
+      const events = await readEvents();
+      const idx = events.findIndex((e) => e.id === id);
+      if (idx === -1) return res.status(404).json({ error: 'Event not found' });
+      const existing = events[idx];
+      const announcements = Array.isArray(payload.announcements) ? payload.announcements : existing.announcements || [];
+      const updated = { ...existing, ...payload, id: existing.id, createdAt: existing.createdAt, announcements };
+      updated.numberOfMentors = typeof payload.numberOfMentors === 'number' ? payload.numberOfMentors : (Number(payload.numberOfMentors) || updated.numberOfMentors || 0);
+      updated.authorizedJudges = Array.isArray(payload.authorizedJudges) ? payload.authorizedJudges : (payload.judgeEmails ? payload.judgeEmails : updated.authorizedJudges || []);
+      if (payload.eventCode && String(payload.eventCode).trim()) updated.eventCode = String(payload.eventCode).trim();
+      events[idx] = updated;
+      await writeEvents(events);
+      return res.json({ message: 'Event updated', event: updated });
+    }
   } catch (err) {
     console.error('Failed to update event', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Validate judge email for an event - returns 200 if allowed
+// Delete event
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (supabaseAdmin) {
+      const { data: deleted, error } = await supabaseAdmin.from('events').delete().eq('id', id).select().single();
+      if (error) {
+        console.error('Supabase delete error', error);
+        return res.status(500).json({ error: 'Failed to delete event' });
+      }
+      return res.json({ message: 'Event deleted', event: deleted });
+    } else {
+      const events = await readEvents();
+      const idx = events.findIndex((e) => e.id === id);
+      if (idx === -1) return res.status(404).json({ error: 'Event not found' });
+      const removed = events.splice(idx, 1)[0];
+      await writeEvents(events);
+      return res.json({ message: 'Event deleted', event: removed });
+    }
+  } catch (err) {
+    console.error('Failed to delete event', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Validate judge email for an event
 app.post('/api/events/:id/validate-judge', async (req, res) => {
   try {
     const id = req.params.id;
     const { email } = req.body || {};
     if (!email) return res.status(400).json({ error: 'Missing email' });
-    const events = await readEvents();
-    // Look up event by ID or eventCode
-    const ev = events.find(e => e.id === id || e.eventCode === String(id).toUpperCase());
+
+    let ev;
+    if (supabaseAdmin) {
+      const { data, error } = await supabaseAdmin.from('events')
+        .select('id, eventCode, authorizedJudges')
+        .or(`id.eq.${id},eventCode.eq.${String(id).toUpperCase()}`)
+        .limit(1)
+        .single();
+      if (error && error.code !== 'PGRST116') { // ignore not found style errors
+        // PGRST116/404 mapping differs; handle absent separately
+      }
+      ev = data || null;
+    } else {
+      const events = await readEvents();
+      ev = events.find(e => e.id === id || (e.eventCode && e.eventCode.toUpperCase() === String(id).toUpperCase()));
+    }
+
     if (!ev) return res.status(404).json({ error: 'Event not found' });
-    const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
+    const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(a => String(a).toLowerCase()) : [];
     const ok = allowed.length === 0 ? false : allowed.includes(email.toLowerCase());
     if (!ok) return res.status(401).json({ error: 'Not authorized as judge for this event' });
     return res.json({ ok: true });
@@ -599,51 +702,41 @@ app.post('/api/events/:id/validate-judge', async (req, res) => {
   }
 });
 
-// Delete an event
-app.delete('/api/events/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const events = await readEvents();
-    const idx = events.findIndex((e) => e.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Event not found' });
-    const removed = events.splice(idx, 1)[0];
-    await writeEvents(events);
-    return res.json({ message: 'Event deleted', event: removed });
-  } catch (err) {
-    console.error('Failed to delete event', err);
-    return res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Announcements: list / create / delete for an event
-app.get('/api/events/:id/announcements', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const events = await readEvents();
-    const ev = events.find((e) => e.id === id);
-    if (!ev) return res.status(404).json({ error: 'Event not found' });
-    return res.json(Array.isArray(ev.announcements) ? ev.announcements : []);
-  } catch (err) {
-    console.error('Failed to list announcements', err);
-    return res.status(500).json({ error: 'Server error' });
-  }
-});
-
+// Announcements (create/delete) - stored in events.announcements JSONB when Supabase used
 app.post('/api/events/:id/announcements', async (req, res) => {
   try {
     const id = req.params.id;
     const { text, author } = req.body || {};
     if (!text) return res.status(400).json({ error: 'Missing text' });
-    const events = await readEvents();
-    const idx = events.findIndex((e) => e.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Event not found' });
-    const ev = events[idx];
-    const announcement = { id: Date.now().toString(), text, author: author || 'Creator', createdAt: new Date().toISOString() };
-    ev.announcements = ev.announcements || [];
-    ev.announcements.push(announcement);
-    events[idx] = ev;
-    await writeEvents(events);
-    return res.status(201).json({ message: 'Announcement added', announcement });
+
+    if (supabaseAdmin) {
+      // fetch existing announcements, append, update
+      const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
+      if (fetchErr) {
+        console.error('Supabase fetch event for announcements', fetchErr);
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      const current = Array.isArray(ev.announcements) ? ev.announcements : [];
+      const announcement = { id: Date.now().toString(), text, author: author || 'Creator', createdAt: new Date().toISOString() };
+      const updated = [...current, announcement];
+      const { data: updatedRow, error: updErr } = await supabaseAdmin.from('events').update({ announcements: updated }).eq('id', id).select().single();
+      if (updErr) {
+        console.error('Supabase update announcements error', updErr);
+        return res.status(500).json({ error: 'Failed to add announcement' });
+      }
+      return res.status(201).json({ message: 'Announcement added', announcement });
+    } else {
+      const events = await readEvents();
+      const idx = events.findIndex((e) => e.id === id);
+      if (idx === -1) return res.status(404).json({ error: 'Event not found' });
+      const ev = events[idx];
+      const announcement = { id: Date.now().toString(), text, author: author || 'Creator', createdAt: new Date().toISOString() };
+      ev.announcements = ev.announcements || [];
+      ev.announcements.push(announcement);
+      events[idx] = ev;
+      await writeEvents(events);
+      return res.status(201).json({ message: 'Announcement added', announcement });
+    }
   } catch (err) {
     console.error('Failed to create announcement', err);
     return res.status(500).json({ error: 'Server error' });
@@ -654,14 +747,31 @@ app.delete('/api/events/:id/announcements/:aid', async (req, res) => {
   try {
     const id = req.params.id;
     const aid = req.params.aid;
-    const events = await readEvents();
-    const idx = events.findIndex((e) => e.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Event not found' });
-    const ev = events[idx];
-    ev.announcements = Array.isArray(ev.announcements) ? ev.announcements.filter(a => a.id !== aid) : [];
-    events[idx] = ev;
-    await writeEvents(events);
-    return res.json({ message: 'Announcement deleted' });
+    if (supabaseAdmin) {
+      // fetch, filter, update
+      const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
+      if (fetchErr) {
+        console.error('Supabase fetch event for announcements delete', fetchErr);
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      const current = Array.isArray(ev.announcements) ? ev.announcements : [];
+      const filtered = current.filter(a => a.id !== aid);
+      const { data: updatedRow, error: updErr } = await supabaseAdmin.from('events').update({ announcements: filtered }).eq('id', id).select().single();
+      if (updErr) {
+        console.error('Supabase update announcements delete error', updErr);
+        return res.status(500).json({ error: 'Failed to delete announcement' });
+      }
+      return res.json({ message: 'Announcement deleted' });
+    } else {
+      const events = await readEvents();
+      const idx = events.findIndex((e) => e.id === id);
+      if (idx === -1) return res.status(404).json({ error: 'Event not found' });
+      const ev = events[idx];
+      ev.announcements = Array.isArray(ev.announcements) ? ev.announcements.filter(a => a.id !== aid) : [];
+      events[idx] = ev;
+      await writeEvents(events);
+      return res.json({ message: 'Announcement deleted' });
+    }
   } catch (err) {
     console.error('Failed to delete announcement', err);
     return res.status(500).json({ error: 'Server error' });
