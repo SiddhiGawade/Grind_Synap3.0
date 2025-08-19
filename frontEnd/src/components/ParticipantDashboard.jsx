@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Award, Share2 } from 'lucide-react';
+import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Award, Share2, X, Clock, MapPin, Users as UsersIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -42,6 +42,47 @@ const ParticipantDashboard = () => {
   // Events loaded from backend for participants to register
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [isEventModalOpen, setEventModalOpen] = useState(false);
+  
+  // Format date to readable string
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Not specified';
+    const options = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    return new Date(dateString).toLocaleString(undefined, options);
+  };
+  
+  // Format event type for display
+  const formatEventType = (type) => {
+    if (!type) return 'General Event';
+    return type
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+  
+  // Render tags from comma-separated string
+  const renderTags = (tags) => {
+    if (!tags) return null;
+    return (
+      <div className="flex flex-wrap gap-2 mt-1">
+        {tags.split(',').map((tag, i) => (
+          <span 
+            key={i}
+            className="px-3 py-1 text-sm rounded-full bg-accent text-secondary"
+          >
+            {tag.trim()}
+          </span>
+        ))}
+      </div>
+    );
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -199,6 +240,260 @@ const ParticipantDashboard = () => {
             </div>
           </div>
         </header>
+
+        {/* Event Details Modal */}
+        <AnimatePresence>
+          {isEventModalOpen && selectedEvent && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+              <motion.div 
+                className="bg-primary rounded-2xl border-2 border-themed w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h2 className="text-2xl font-bold text-primary">
+                          {selectedEvent.eventTitle || 'Event Details'}
+                        </h2>
+                        <span className="px-3 py-1 text-sm rounded-full bg-accent text-secondary">
+                          {formatEventType(selectedEvent.eventType)}
+                        </span>
+                      </div>
+                      {selectedEvent.organization && (
+                        <p className="text-primary/80 flex items-center gap-1">
+                          <UsersIcon className="w-4 h-4" />
+                          {selectedEvent.organization}
+                        </p>
+                      )}
+                    </div>
+                    <button 
+                      onClick={() => setEventModalOpen(false)}
+                      className="p-1 rounded-full hover:bg-secondary transition-colors"
+                    >
+                      <X className="w-6 h-6 text-primary" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Event Description */}
+                    {selectedEvent.eventDescription && (
+                      <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                        <h3 className="text-lg font-semibold text-primary mb-2">About This Event</h3>
+                        <p className="text-primary whitespace-pre-line">{selectedEvent.eventDescription}</p>
+                      </div>
+                    )}
+
+                    {/* Event Details Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Date & Time */}
+                      <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                        <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
+                          <CalendarIcon className="w-5 h-5 text-accent" />
+                          When
+                        </h3>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-sm font-medium text-primary/70">Starts</p>
+                            <p className="text-primary">
+                              {formatDate(selectedEvent.startDate || selectedEvent.startTime)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-primary/70">Ends</p>
+                            <p className="text-primary">
+                              {formatDate(selectedEvent.endDate || selectedEvent.endTime)}
+                            </p>
+                          </div>
+                          {selectedEvent.registrationDeadline && (
+                            <div className="pt-2 mt-2 border-t border-themed/30">
+                              <p className="text-sm font-medium text-primary/70">Registration Deadline</p>
+                              <p className="text-primary">{formatDate(selectedEvent.registrationDeadline)}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Location & Mode */}
+                      <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                        <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
+                          <MapPin className="w-5 h-5 text-accent" />
+                          Where
+                        </h3>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-sm font-medium text-primary/70">Mode</p>
+                            <p className="text-primary capitalize">
+                              {selectedEvent.eventMode === 'online' ? 'Online' : 
+                               selectedEvent.eventMode === 'offline' ? 'In-Person' : 
+                               selectedEvent.hackathonMode === 'online' ? 'Online' :
+                               selectedEvent.hackathonMode === 'offline' ? 'In-Person' :
+                               'To be announced'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-primary/70">
+                              {selectedEvent.eventMode === 'online' || selectedEvent.hackathonMode === 'online' 
+                                ? 'Meeting Link' 
+                                : 'Venue'}
+                            </p>
+                            <p className="text-primary break-words">
+                              {selectedEvent.venue || selectedEvent.meetingLink || 'To be announced'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Participation */}
+                      <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                        <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
+                          <UsersIcon className="w-5 h-5 text-accent" />
+                          Participation
+                        </h3>
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-sm font-medium text-primary/70">Team Size</p>
+                            <p className="text-primary">
+                              {selectedEvent.minTeamSize && selectedEvent.maxTeamSize 
+                                ? `${selectedEvent.minTeamSize} - ${selectedEvent.maxTeamSize} members`
+                                : selectedEvent.numberOfParticipants 
+                                  ? `Up to ${selectedEvent.numberOfParticipants} participants`
+                                  : 'Individual or Team'}
+                            </p>
+                          </div>
+                          {selectedEvent.maxParticipants && (
+                            <div>
+                              <p className="text-sm font-medium text-primary/70">Max Participants</p>
+                              <p className="text-primary">{selectedEvent.maxParticipants}</p>
+                            </div>
+                          )}
+                          {selectedEvent.eligibility && (
+                            <div>
+                              <p className="text-sm font-medium text-primary/70">Eligibility</p>
+                              <p className="text-primary capitalize">
+                                {selectedEvent.eligibility === 'open' ? 'Open to all' : selectedEvent.eligibility}
+                              </p>
+                            </div>
+                          )}
+                          {selectedEvent.registrationFee && (
+                            <div>
+                              <p className="text-sm font-medium text-primary/70">Registration Fee</p>
+                              <p className="text-primary">₹{selectedEvent.registrationFee}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Prizes & Certificates */}
+                      <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                        <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
+                          <Trophy className="w-5 h-5 text-accent" />
+                          Prizes & Certificates
+                        </h3>
+                        <div className="space-y-3">
+                          {selectedEvent.prizeDetails ? (
+                            <div>
+                              <p className="text-sm font-medium text-primary/70">Prizes</p>
+                              <p className="text-primary whitespace-pre-line">{selectedEvent.prizeDetails}</p>
+                            </div>
+                          ) : (
+                            <p className="text-primary/70">Prize details coming soon</p>
+                          )}
+                          
+                          <div className="flex items-center gap-2 text-primary">
+                            {selectedEvent.participationCertificates ? (
+                              <>
+                                <svg className="w-5 h-5 text-accent flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Participation certificates will be provided</span>
+                              </>
+                            ) : (
+                              <span className="text-primary/70">No participation certificates</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Information */}
+                    <div className="space-y-6">
+                      {/* Themes */}
+                      {selectedEvent.themes && (
+                        <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                          <h3 className="font-semibold text-primary mb-3">Themes</h3>
+                          {renderTags(selectedEvent.themes)}
+                        </div>
+                      )}
+
+                      {/* Tracks */}
+                      {selectedEvent.tracks && selectedEvent.tracks.length > 0 && (
+                        <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                          <h3 className="font-semibold text-primary mb-3">Tracks</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedEvent.tracks.map((track, i) => (
+                              <span 
+                                key={i}
+                                className="px-3 py-1 text-sm rounded-full bg-accent/20 text-primary border border-accent"
+                              >
+                                {track}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Submission Guidelines */}
+                      {selectedEvent.submissionGuidelines && (
+                        <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                          <h3 className="font-semibold text-primary mb-3">Submission Guidelines</h3>
+                          <div className="prose prose-sm max-w-none text-primary">
+                            {selectedEvent.submissionGuidelines}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Evaluation Criteria */}
+                      {selectedEvent.evaluationCriteria && (
+                        <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                          <h3 className="font-semibold text-primary mb-3">Evaluation Criteria</h3>
+                          <div className="prose prose-sm max-w-none text-primary">
+                            {selectedEvent.evaluationCriteria}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                      <button
+                        onClick={() => {
+                          // Handle registration logic here
+                          console.log('Registering for event:', selectedEvent);
+                          alert(`Successfully registered for: ${selectedEvent.eventTitle}`);
+                          setEventModalOpen(false);
+                        }}
+                        className="btn-primary px-6 py-3 rounded-lg border-2 font-medium flex-1 flex items-center justify-center gap-2 text-lg"
+                      >
+                        <Plus className="w-6 h-6" />
+                        Register for this Event
+                      </button>
+                      <button
+                        onClick={() => setEventModalOpen(false)}
+                        className="btn-secondary px-6 py-3 rounded-lg border-2 font-medium flex-1 text-lg"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -362,9 +657,8 @@ const ParticipantDashboard = () => {
                           className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
                           disabled={eventStatus === 'Ended'}
                           onClick={() => {
-                            // For now, just log the event details
-                            console.log('Register for event:', ev);
-                            alert(`Registering for: ${ev.eventTitle}\nEvent Code: ${ev.eventCode}`);
+                            setSelectedEvent(ev);
+                            setEventModalOpen(true);
                           }}
                         >
                           {eventStatus === 'Ended' ? 'Ended' : 'Register'}
