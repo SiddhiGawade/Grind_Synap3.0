@@ -79,7 +79,13 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
     if (step === 0) {
       if (!form.name.trim()) return 'Name is required';
       if (!form.email.trim() || !/^[^@]+@[^@]+\.[^@]+$/.test(form.email)) return 'Valid email is required';
-      if (!form.aadhar.trim()) return 'Aadhar number is required';
+      
+      // Aadhar validation
+      const aadharNumber = form.aadhar.trim();
+      if (!aadharNumber) return 'Aadhar number is required';
+      if (!/^\d{12}$/.test(aadharNumber)) return 'Aadhar number must be exactly 12 digits';
+      if (/[^0-9]/.test(aadharNumber)) return 'Aadhar number must contain only numbers';
+      if (['0', '1'].includes(aadharNumber[0])) return 'Aadhar number must start with a digit between 2-9';
       return null;
     }
     if (step === 1) {
@@ -180,7 +186,18 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Aadhar number</label>
-                  <input value={form.aadhar} onChange={(e) => update({ aadhar: e.target.value })} className="mt-1 w-full border p-3 rounded bg-[#fafafa]" />
+                  <input 
+                    value={form.aadhar} 
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 12);
+                      update({ aadhar: value });
+                    }}
+                    maxLength={12}
+                    pattern="\d*"
+                    inputMode="numeric"
+                    placeholder="Enter 12-digit Aadhar number"
+                    className="mt-1 w-full border p-3 rounded bg-[#fafafa]" 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Organization</label>
