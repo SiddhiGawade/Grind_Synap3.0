@@ -5,10 +5,11 @@ import SigninPage from './components/SigninPage';
 import ParticipantDashboard from './components/ParticipantDashboard';
 import CreatorDashboard from './components/CreatorDashboard';
 import JudgeDashboard from './components/JudgeDashboard';
+import LandingPage from './components/LandingPage';
 
 // Main App Component
 const App = () => {
-  const [currentPage, setCurrentPage] = useState('signup');
+  const [currentPage, setCurrentPage] = useState('landing');
   const { user } = useAuth();
 
   const handleNavigation = (page) => {
@@ -18,6 +19,8 @@ const App = () => {
   const renderPage = () => {
     if (user && currentPage === 'dashboard') {
       switch (user.role) {
+        case 'landing':
+          return <LandingPage onNavigate={handleNavigation} />;
         case 'participant':
           return <ParticipantDashboard />;
         case 'organizer':
@@ -34,8 +37,10 @@ const App = () => {
         return <SignupPage onNavigate={handleNavigation} />;
       case 'signin':
         return <SigninPage onNavigate={handleNavigation} />;
+      case 'landing': // Ensure landing page is explicitly handled
+        return <LandingPage onNavigate={handleNavigation} />;
       default:
-        return <SignupPage onNavigate={handleNavigation} />;
+        return <LandingPage onNavigate={handleNavigation} />; // Default to landing page
     }
   };
 
