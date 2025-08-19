@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-// Clean 3-step wizard without image upload
-const steps = ['Host details', 'Event details', 'Confirmation'];
+// 4-step wizard: Host -> Event -> Mentors -> Confirmation
+const steps = ['Host details', 'Event details', 'Mentors', 'Confirmation'];
 
 const initialForm = (prefill = {}) => ({
   name: prefill.name || '',
@@ -12,12 +12,16 @@ const initialForm = (prefill = {}) => ({
   eventTitle: '',
   eventDescription: '',
   startDate: '',
-  endDate: ''
+  endDate: '',
+  numberOfMentors: 0,
+  selectedJudges: []
 });
 
 const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(initialForm(prefill));
+  const [availableJudges, setAvailableJudges] = useState([]);
+  const [judgesLoading, setJudgesLoading] = useState(false);
   const isEdit = Boolean(event && event.id);
 
   useEffect(() => {
@@ -34,15 +38,37 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
         eventDescription: event.eventDescription || s.eventDescription,
         startDate: event.startDate || s.startDate,
         endDate: event.endDate || s.endDate,
-        imageFilename: event.imageFilename || s.imageFilename
+        numberOfMentors: event.numberOfMentors || s.numberOfMentors,
+        selectedJudges: Array.isArray(event.authorizedJudges) ? event.authorizedJudges : []
       }));
     }
   }, [isEdit, event]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [createdEvent, setCreatedEvent] = useState(null);
 
   useEffect(() => {
+    // Fetch available judges when component mounts
+    const fetchJudges = async () => {
+      setJudgesLoading(true);
+      try {
+        const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+        const res = await fetch(`${API_BASE}/api/judges`);
+        const data = await res.json();
+        if (res.ok) {
+          setAvailableJudges(data.judges || []);
+        } else {
+          console.error('Failed to fetch judges:', data.error);
+        }
+      } catch (err) {
+        console.error('Error fetching judges:', err);
+      } finally {
+        setJudgesLoading(false);
+      }
+    };
+
+    fetchJudges();
     return () => {};
   }, []);
 
@@ -58,6 +84,11 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
     }
     if (step === 1) {
       if (!form.eventTitle.trim()) return 'Event title is required';
+      return null;
+    }
+    if (step === 2) {
+      const n = Number(form.numberOfMentors || 0);
+      if (Number.isNaN(n) || n < 0) return 'Number of mentors must be 0 or greater';
       return null;
     }
     return null;
@@ -77,7 +108,15 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
     setLoading(true);
     setError(null);
     try {
+      // Build payload and use selectedJudges directly
       const payload = { ...form };
+      if (Array.isArray(form.selectedJudges)) {
+        payload.authorizedJudges = form.selectedJudges;
+      } else {
+        payload.authorizedJudges = [];
+      }
+      // Remove selectedJudges from payload as backend expects authorizedJudges
+      delete payload.selectedJudges;
       const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
       const url = isEdit ? `${API_BASE}/api/events/${event.id}` : `${API_BASE}/api/events`;
       const method = isEdit ? 'PUT' : 'POST';
@@ -90,10 +129,14 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       setLoading(false);
       if (!res.ok) return setError(data.error || 'Failed to create event');
       setSuccess(data.message || 'Event created successfully');
-      setTimeout(() => {
-        if (onCreated) try { onCreated(data.event || null); } catch (e) {}
-        onClose && onClose();
-      }, 700);
+      // keep created event in local state so we can show the generated eventCode
+      setCreatedEvent(data.event || null);
+      // notify parent immediately so lists can refresh, but do not close the modal
+      if (onCreated) {
+        try { onCreated(data.event || null); } catch (e) {}
+      }
+      // move user to confirmation step so they can copy/share the event code
+      setStep(steps.length - 1);
     } catch (err) {
       setLoading(false);
       setError(err.message || 'Network error');
@@ -180,6 +223,61 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
 
           {step === 2 && (
             <div className="space-y-4">
+              <h3 className="text-lg font-bold">Mentors & Judges</h3>
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-medium">Number of mentors</label>
+                  <input 
+                    type="number" 
+                    value={form.numberOfMentors || 0} 
+                    onChange={(e) => update({ numberOfMentors: Number(e.target.value) })} 
+                    min={0} 
+                    className="mt-1 w-40 border p-3 rounded bg-[#fafafa]" 
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">Select Authorized Judges</label>
+                  {judgesLoading ? (
+                    <div className="text-sm text-gray-500">Loading judges...</div>
+                  ) : availableJudges.length === 0 ? (
+                    <div className="text-sm text-gray-500">No judges available. Judges need to be created first.</div>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3 bg-[#fafafa]">
+                      {availableJudges.map((judge) => (
+                        <label key={judge.email} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded">
+                          <input
+                            type="checkbox"
+                            checked={form.selectedJudges.includes(judge.email)}
+                            onChange={(e) => {
+                              const isChecked = e.target.checked;
+                              const currentJudges = form.selectedJudges || [];
+                              if (isChecked) {
+                                update({ selectedJudges: [...currentJudges, judge.email] });
+                              } else {
+                                update({ selectedJudges: currentJudges.filter(email => email !== judge.email) });
+                              }
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium">{judge.name}</div>
+                            <div className="text-xs text-gray-600">{judge.email}</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-xs text-[#151616]/60 mt-2">
+                    Selected: {form.selectedJudges?.length || 0} judges. Only selected judges will be allowed to sign in for this event.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
               <h3 className="text-lg font-bold">Confirmation</h3>
               <div className="space-y-2">
                 <p><strong>Host:</strong> {form.name} • {form.email}</p>
@@ -188,6 +286,36 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                 <p><strong>Title:</strong> {form.eventTitle}</p>
                 <p><strong>Description:</strong> {form.eventDescription}</p>
                 <p><strong>Dates:</strong> {form.startDate || '—'} to {form.endDate || '—'}</p>
+                <p><strong>Mentors:</strong> {form.numberOfMentors || 0}</p>
+                {form.selectedJudges?.length > 0 && (
+                  <div>
+                    <p><strong>Authorized judges:</strong></p>
+                    <div className="ml-4 text-sm">
+                      {form.selectedJudges.map(email => {
+                        const judge = availableJudges.find(j => j.email === email);
+                        return (
+                          <div key={email} className="flex justify-between">
+                            <span>{judge?.name || 'Unknown'}</span>
+                            <span className="text-gray-600">{email}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {createdEvent?.eventCode ? (
+                  <div className="mt-3 p-3 border rounded bg-[#f7fff0]">
+                    <div className="text-sm text-[#151616]/70">Event Code</div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl font-bold">{createdEvent.eventCode}</div>
+                      <button onClick={() => { navigator.clipboard?.writeText(createdEvent.eventCode); }} className="px-2 py-1 border rounded text-sm">Copy</button>
+                    </div>
+                    <div className="text-xs text-[#151616]/60">Share this code with judges so they can sign in to this event.</div>
+                  </div>
+                ) : (
+                  <div className="mt-3 text-sm text-[#151616]/60">The event code will be generated after creation.</div>
+                )}
               </div>
             </div>
           )}

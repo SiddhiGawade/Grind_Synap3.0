@@ -135,7 +135,7 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  const signin = async ({ email, password, role }) => {
+  const signin = async ({ email, password, role, eventId } = {}) => {
     setLoading(true);
     try {
       if (supabaseClient) {
@@ -167,11 +167,11 @@ const AuthProvider = ({ children }) => {
 
         // Step 2: Validate role with backend if role is specified
         if (role) {
-          try {
+            try {
             const roleRes = await fetch(`${API_BASE}/api/auth/signin`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, password: 'dummy', role }),
+              body: JSON.stringify({ email, password: 'dummy', role, eventId }),
             });
 
             const roleData = await roleRes.json();
@@ -213,7 +213,7 @@ const AuthProvider = ({ children }) => {
       const res = await fetch(`${API_BASE}/api/auth/signin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, role }),
+  body: JSON.stringify({ email, password, role, eventId }),
       });
       const data = await res.json();
       setLoading(false);

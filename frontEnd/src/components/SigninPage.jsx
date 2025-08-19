@@ -7,7 +7,8 @@ const SigninPage = ({ onNavigate }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    role: 'participant'
+  role: 'participant',
+  eventId: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
@@ -15,7 +16,7 @@ const SigninPage = ({ onNavigate }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    const res = await signin({ email: formData.email, password: formData.password, role: formData.role });
+  const res = await signin({ email: formData.email, password: formData.password, role: formData.role, eventId: formData.eventId });
     if (res.ok) {
       onNavigate('dashboard');
     } else {
@@ -122,6 +123,22 @@ const SigninPage = ({ onNavigate }) => {
                 </button>
               </div>
             </div>
+
+            {/* Event ID for judges */}
+            {formData.role === 'judge' && (
+              <div>
+                <label className="block text-sm font-medium text-[#151616] mb-2">Event ID</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full py-3 border-2 border-[#151616] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D6F32F] focus:border-[#D6F32F]"
+                  placeholder="Enter Event ID provided by organizer"
+                  value={formData.eventId}
+                  onChange={(e) => setFormData({...formData, eventId: e.target.value})}
+                />
+                <div className="text-xs text-[#151616]/60 mt-2">Judges must use the Event ID and credentials authorized by the event creator.</div>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button

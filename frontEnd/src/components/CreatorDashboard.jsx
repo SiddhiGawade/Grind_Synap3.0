@@ -71,9 +71,24 @@ const CreatorDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <div className="bg-gradient-to-r from-blue-100 to-blue-50 p-6 rounded-2xl border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616]">
-            <h2 className="text-2xl font-black text-[#151616] mb-2">Event Creator Dashboard 📋</h2>
-            <p className="text-[#151616]/70">Manage your events and track participant engagement</p>
+          <div className="bg-gradient-to-r from-blue-100 to-blue-50 p-6 rounded-2xl border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616] flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-[#151616] mb-2">Event Creator Dashboard 📋</h2>
+              <p className="text-[#151616]/70">Manage your events and track participant engagement</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setShowWizard(true)} className="hidden md:inline-flex bg-[#D6F32F] p-3 rounded-lg border-2 border-[#151616] shadow-[2px_2px_0px_0px_#151616] hover:shadow-[1px_1px_0px_0px_#151616] hover:translate-x-[1px] hover:translate-y-[1px] transition-all font-medium text-[#151616] flex items-center gap-2">
+                <Plus className="w-5 h-5" />
+                Create New Event
+              </button>
+              <button onClick={() => setManageOpen(true)} className="hidden md:inline-flex bg-white p-3 rounded-lg border-2 border-[#151616] hover:bg-[#151616]/5 transition-colors font-medium text-[#151616] flex items-center gap-2">
+                <Edit className="w-5 h-5" />
+                Manage Events
+              </button>
+              {/* mobile fallback: small icons */}
+              <button onClick={() => setShowWizard(true)} className="md:hidden p-2 rounded-lg border-2 border-[#151616] bg-[#D6F32F] text-[#151616]"><Plus className="w-4 h-4" /></button>
+              <button onClick={() => setManageOpen(true)} className="md:hidden p-2 rounded-lg border-2 border-[#151616] bg-white text-[#151616]"><Edit className="w-4 h-4" /></button>
+            </div>
           </div>
         </div>
 
@@ -128,26 +143,9 @@ const CreatorDashboard = () => {
           </div>
         </div>
 
-        {/* Layout: left sidebar for management, right for recent events + performance */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-          <div className="lg:col-span-1">
-            <div className="bg-white p-6 rounded-2xl border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616] h-full sticky top-24">
-              <h3 className="text-lg font-bold text-[#151616] mb-4">Event Management</h3>
-              <div className="space-y-3">
-                <button onClick={() => setShowWizard(true)} className="w-full bg-[#D6F32F] p-3 rounded-lg border-2 border-[#151616] shadow-[2px_2px_0px_0px_#151616] hover:shadow-[1px_1px_0px_0px_#151616] hover:translate-x-[1px] hover:translate-y-[1px] transition-all font-medium text-[#151616] flex items-center gap-2">
-                  <Plus className="w-5 h-5" />
-                  Create New Event
-                </button>
-                <button onClick={() => setManageOpen(true)} className="w-full bg-white p-3 rounded-lg border-2 border-[#151616] hover:bg-[#151616]/5 transition-colors font-medium text-[#151616] flex items-center gap-2">
-                  <Edit className="w-5 h-5" />
-                  Manage Events
-                </button>
-                {/* Analytics removed per request */}
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-3 space-y-6">
+        {/* Recent events + performance (sidebar removed) */}
+        <div className="grid grid-cols-1 gap-6 mb-8">
+          <div className="space-y-6">
             <div className="bg-white p-6 rounded-2xl border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616]">
               <h3 className="text-lg font-bold text-[#151616] mb-4">Recent Events</h3>
               <div className="space-y-3">

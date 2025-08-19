@@ -1,29 +1,61 @@
 [
   {
-    "id": "1755581016003",
+    "id": "1755583804597",
     "name": "FREDRICK NADAR",
     "email": "fred@123.com",
-    "aadhar": "741258963159",
-    "organization": "dsadasdasd",
-    "designation": "sdasdasdasdasdsad",
-    "eventTitle": "sdasdfgefgedfg",
-    "eventDescription": "agasdfgqwfadgfasdfasfa",
-    "startDate": "2025-08-29",
-    "endDate": "2025-08-30",
-    "announcements": [
-      {
-        "id": "1755581057853",
-        "text": "Mujhe kuch nhi pata",
-        "author": "FREDRICK NADAR",
-        "createdAt": "2025-08-19T05:24:17.853Z"
-      },
-      {
-        "id": "1755581463075",
-        "text": "Abh samajh raarha hai",
-        "author": "FREDRICK NADAR",
-        "createdAt": "2025-08-19T05:31:03.075Z"
-      }
+    "aadhar": "723397036925",
+    "organization": "asdasdaf",
+    "designation": "agfasgeftfaf",
+    "eventTitle": "sdasd",
+    "eventDescription": "asdasdasda",
+    "startDate": "2025-08-20",
+    "endDate": "2025-08-28",
+    "numberOfMentors": 1,
+    "judgeEmailsText": "judge@1.com",
+    "authorizedJudges": [
+      "judge@1.com"
     ],
-    "createdAt": "2025-08-19T05:23:36.003Z"
+    "announcements": [],
+    "eventCode": "CTCCZY",
+    "createdAt": "2025-08-19T06:10:04.597Z"
+  },
+  {
+    "id": "1755583828147",
+    "name": "FREDRICK NADAR",
+    "email": "fred@123.com",
+    "aadhar": "723397036925",
+    "organization": "asdasdaf",
+    "designation": "agfasgeftfaf",
+    "eventTitle": "sdasd",
+    "eventDescription": "asdasdasda",
+    "startDate": "2025-08-20",
+    "endDate": "2025-08-28",
+    "numberOfMentors": 1,
+    "judgeEmailsText": "judge@1.com",
+    "authorizedJudges": [
+      "judge@1.com"
+    ],
+    "announcements": [],
+    "eventCode": "HC86CT",
+    "createdAt": "2025-08-19T06:10:28.147Z"
+  },
+  {
+    "id": "1755585208758",
+    "name": "FREDRICK NADAR",
+    "email": "fred@123.com",
+    "aadhar": "478569321486",
+    "organization": "sdtg8a7ytgfda",
+    "designation": "dasdasfasf",
+    "eventTitle": "Hellol",
+    "eventDescription": "World",
+    "startDate": "2025-08-20",
+    "endDate": "2025-08-22",
+    "numberOfMentors": 1,
+    "authorizedJudges": [
+      "alice.judge@example.com"
+    ],
+    "announcements": [],
+    "eventCode": "URZ44T",
+    "createdAt": "2025-08-19T06:33:28.758Z"
   }
 ]

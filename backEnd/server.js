@@ -149,6 +149,14 @@ async function writeEvents(events) {
   await fs.writeFile(EVENTS_FILE, JSON.stringify(events, null, 2));
 }
 
+// Small helper to generate a short human-friendly event code
+function generateEventCode(len = 6) {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // avoid confusing chars
+  let out = '';
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
@@ -262,7 +270,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
 app.post('/api/auth/signin', async (req, res) => {
   try {
-    const { email, password, role } = req.body || {};
+  const { email, password, role, eventId } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: 'Missing email or password' });
     }
@@ -279,14 +287,48 @@ app.post('/api/auth/signin', async (req, res) => {
           .single();
 
         if (profileError || !profileData) {
-          // User doesn't exist in profiles table - return generic error for privacy
-          return res.status(401).json({ error: 'Invalid email or password' });
+          // User doesn't exist in Supabase profiles table
+          // Check file-based users as fallback (for judges created in users.json)
+          const users = await readUsers();
+          const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+          if (!user || (role && user.role !== role)) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+          }
+
+          const isMatch = await bcrypt.compare(password, user.passwordHash);
+          if (!isMatch) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+          }
+
+          // If judge role and eventId provided, validate authorized judges for that event
+          if (role === 'judge' && eventId) {
+            const events = await readEvents();
+            // Look up event by ID or eventCode
+            const ev = events.find(e => e.id === String(eventId) || e.eventCode === String(eventId).toUpperCase());
+            if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
+            const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
+            if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
+          }
+
+          // Return file-based user authentication success
+          const payload = { id: user.id, email: user.email, name: user.name, role: user.role };
+          const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+          return res.json({ token, user: payload });
         }
 
         // Check role if provided
         if (role && profileData.role !== role) {
           // Role mismatch - return generic error for privacy
           return res.status(401).json({ error: 'Invalid email or password' });
+        }
+        // If judge role and eventId provided, validate authorizedJudges
+        if (role === 'judge' && eventId) {
+          const events = await readEvents();
+          // Look up event by ID or eventCode
+          const ev = events.find(e => e.id === String(eventId) || e.eventCode === String(eventId).toUpperCase());
+          if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
+          const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
+          if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
         }
 
         // For Supabase-backed auth, return success with user profile
@@ -318,6 +360,16 @@ app.post('/api/auth/signin', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // If judge role and eventId provided, validate authorized judges for that event
+    if (role === 'judge' && eventId) {
+      const events = await readEvents();
+      // Look up event by ID or eventCode
+      const ev = events.find(e => e.id === String(eventId) || e.eventCode === String(eventId).toUpperCase());
+      if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
+      const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
+      if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     const payload = { id: user.id, email: user.email, name: user.name, role: user.role };
@@ -408,6 +460,44 @@ app.post('/api/auth/sync-profile', async (req, res) => {
   }
 });
 
+// Get all judges for creator to select from
+app.get('/api/judges', async (req, res) => {
+  try {
+    if (supabaseAdmin) {
+      // Get judges from Supabase profiles table
+      try {
+        const { data: judges, error } = await supabaseAdmin
+          .from('profiles')
+          .select('id, name, email')
+          .eq('role', 'judge')
+          .order('name');
+        
+        if (error) {
+          console.error('Supabase judges fetch error', error);
+          return res.status(500).json({ error: 'Failed to fetch judges' });
+        }
+        
+        return res.json({ judges: judges || [] });
+      } catch (e) {
+        console.error('Supabase judges exception', e);
+        return res.status(500).json({ error: 'Server error' });
+      }
+    } else {
+      // Fallback: get judges from users.json
+      const users = await readUsers();
+      const judges = users
+        .filter(u => u.role === 'judge')
+        .map(u => ({ id: u.id, name: u.name, email: u.email }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      
+      return res.json({ judges });
+    }
+  } catch (err) {
+    console.error('Get judges error', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Simple events creation endpoint (file-backed fallback). If Supabase is configured,
 // you can extend this to insert into a Supabase table instead.
 app.post('/api/events', async (req, res) => {
@@ -419,10 +509,23 @@ app.post('/api/events', async (req, res) => {
     }
 
     const events = await readEvents();
+    // generate a unique eventCode (try a few times to avoid collision)
+    let code = generateEventCode(6);
+    const existingCodes = new Set(events.map(e => (e.eventCode || '').toUpperCase()));
+    let attempts = 0;
+    while (existingCodes.has(code) && attempts < 10) {
+      code = generateEventCode(6);
+      attempts++;
+    }
+
     const newEvent = {
       id: Date.now().toString(),
-  ...data,
-  announcements: Array.isArray(data.announcements) ? data.announcements : [],
+      ...data,
+      announcements: Array.isArray(data.announcements) ? data.announcements : [],
+      // Persist mentor/judge info
+      numberOfMentors: typeof data.numberOfMentors === 'number' ? data.numberOfMentors : (Number(data.numberOfMentors) || 0),
+      authorizedJudges: Array.isArray(data.authorizedJudges) ? data.authorizedJudges : (Array.isArray(data.judgeEmails) ? data.judgeEmails : []),
+      eventCode: (data.eventCode && String(data.eventCode).trim()) ? String(data.eventCode).trim() : code,
       createdAt: new Date().toISOString()
     };
     events.push(newEvent);
@@ -458,11 +561,40 @@ app.put('/api/events/:id', async (req, res) => {
   // Preserve announcements unless payload explicitly sends announcements
   const announcements = Array.isArray(payload.announcements) ? payload.announcements : existing.announcements || [];
   const updated = { ...existing, ...payload, id: existing.id, createdAt: existing.createdAt, announcements };
+  // Normalize mentor/judge fields
+  updated.numberOfMentors = typeof payload.numberOfMentors === 'number' ? payload.numberOfMentors : (Number(payload.numberOfMentors) || updated.numberOfMentors || 0);
+  updated.authorizedJudges = Array.isArray(payload.authorizedJudges) ? payload.authorizedJudges : (payload.judgeEmails ? payload.judgeEmails : updated.authorizedJudges || []);
+  // Preserve existing eventCode unless payload explicitly provides one
+  if (payload.eventCode && String(payload.eventCode).trim()) {
+    updated.eventCode = String(payload.eventCode).trim();
+  } else {
+    updated.eventCode = existing.eventCode || existing.eventCode === 0 ? existing.eventCode : existing.eventCode;
+  }
     events[idx] = updated;
     await writeEvents(events);
     return res.json({ message: 'Event updated', event: updated });
   } catch (err) {
     console.error('Failed to update event', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Validate judge email for an event - returns 200 if allowed
+app.post('/api/events/:id/validate-judge', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'Missing email' });
+    const events = await readEvents();
+    // Look up event by ID or eventCode
+    const ev = events.find(e => e.id === id || e.eventCode === String(id).toUpperCase());
+    if (!ev) return res.status(404).json({ error: 'Event not found' });
+    const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
+    const ok = allowed.length === 0 ? false : allowed.includes(email.toLowerCase());
+    if (!ok) return res.status(401).json({ error: 'Not authorized as judge for this event' });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Judge validation error', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });
