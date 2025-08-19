@@ -94,7 +94,7 @@ const ParticipantDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FFFFF4] font-['Inter']">
+    <div className="min-h-screen bg-[#FFFFF4] font-sans">
       {/* Header */}
       <header className="bg-white border-b-2 border-[#151616] sticky top-0 z-40 animate-slide-down">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -9,10 +9,62 @@ import {
   Award,
   Code,
   ShieldCheck,
-  Github,   // Added for footer
-  Twitter,  // Added for footer
-  Linkedin, // Added for footer
+  Github,
+  Twitter,
+  Linkedin,
+  Plus, // Used for the accordion toggle icon
+  Minus, // Used for the accordion toggle icon
 } from 'lucide-react';
+
+// --- NEW FaqItem COMPONENT ---
+const FaqItem = ({ question, answer, darkMode }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Animation variants for the answer text
+  const contentVariants = {
+    open: { opacity: 1, height: 'auto', marginTop: 16, transition: { duration: 0.4, ease: 'easeInOut' } },
+    closed: { opacity: 0, height: 0, marginTop: 0, transition: { duration: 0.4, ease: 'easeInOut' } },
+  };
+
+  return (
+    <div
+      className={`p-6 rounded-2xl border-2 cursor-pointer transition-colors duration-300 ${
+        darkMode ? 'border-[#333] bg-[#1e1f20]' : 'border-[#151616] bg-white'
+      }`}
+      onClick={() => setIsOpen(!isOpen)}
+    >
+      <div className="flex justify-between items-center">
+        <h3 className={`text-lg md:text-xl font-bold ${darkMode ? 'text-white' : 'text-[#151616]'}`}>
+          {question}
+        </h3>
+        <motion.div
+          initial={{ rotate: 0 }}
+          animate={{ rotate: isOpen ? 45 : 0 }}
+          transition={{ duration: 0.3 }}
+          className={`${darkMode ? 'text-[#D6F32F]' : 'text-[#151616]'}`}
+        >
+          <Plus className="w-6 h-6" />
+        </motion.div>
+      </div>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            key="content"
+            initial="closed"
+            animate="open"
+            exit="closed"
+            variants={contentVariants}
+            className="overflow-hidden"
+          >
+            <p className={`text-sm md:text-base ${darkMode ? 'text-gray-300' : 'text-[#151616]/80'}`}>
+              {answer}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 const LandingPage = ({ onNavigate }) => {
   const [darkMode, setDarkMode] = useState(false);
@@ -40,6 +92,25 @@ const LandingPage = ({ onNavigate }) => {
     },
   };
 
+  const faqData = [
+    {
+      question: "What is HackHub?",
+      answer: "HackHub is a platform designed to help you organize, participate in, and judge hackathons, streamlining the entire event lifecycle."
+    },
+    {
+      question: "Who can participate in hackathons?",
+      answer: "Anyone with a passion for innovation and problem-solving can participate. Whether you're a student, professional, or hobbyist, HackHub welcomes you."
+    },
+    {
+      question: "How do I host a hackathon on HackHub?",
+      answer: "Hosting a hackathon is simple. Sign up as an organizer, create your event, and use our tools to manage participants, teams, and judging seamlessly."
+    },
+    {
+      question: "Is HackHub free to use?",
+      answer: "HackHub offers both free and premium plans. The free plan includes essential features, while premium plans provide advanced tools for organizers and participants."
+    },
+  ];
+
   return (
     <div
       className={`min-h-screen flex flex-col transition-colors duration-500 overflow-x-hidden ${
@@ -61,7 +132,7 @@ const LandingPage = ({ onNavigate }) => {
           <Trophy className="w-6 h-6" />
           <span>HackHub</span>
         </div>
-        <nav className="hidden md:flex  gap-18 text-sm font-medium ml-30">
+        <nav className="hidden md:flex gap-18 text-sm font-medium ml-30">
           <a href="#features" className="hover:text-[#D6F32F] transition-colors">Features</a>
           <a href="#about" className="hover:text-[#D6F32F] transition-colors">About</a>
           <a href="#contact" className="hover:text-[#D6F32F] transition-colors">Contact</a>
@@ -124,7 +195,6 @@ const LandingPage = ({ onNavigate }) => {
             <ShieldCheck className="w-8 h-8 text-green-500" />
             <span className="text-lg font-bold tracking-wide">Verified Events Only. No Scams.</span>
           </motion.div>
-
         </motion.div>
       </section>
 
@@ -169,6 +239,28 @@ const LandingPage = ({ onNavigate }) => {
         </motion.button>
       </motion.section>
 
+      {/* --- NEW FAQ SECTION --- */}
+      <motion.section
+        id="faq"
+        className={`px-8 py-20 ${darkMode ? 'bg-[#151616] text-[#D6F32F]' : 'bg-[#f9f9f9] text-[#151616]'}`}
+        initial={{ opacity: 0, y: 50 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        viewport={{ once: true, amount: 0.2 }}
+      >
+        <h2 className="text-4xl font-black text-center mb-12">Frequently Asked Questions</h2>
+        <div className="max-w-4xl mx-auto space-y-4">
+          {faqData.map((item, index) => (
+            <FaqItem
+              key={index}
+              question={item.question}
+              answer={item.answer}
+              darkMode={darkMode}
+            />
+          ))}
+        </div>
+      </motion.section>
+
       {/* --- NEW, ENHANCED FOOTER --- */}
       <motion.footer
         id="contact"
@@ -178,9 +270,9 @@ const LandingPage = ({ onNavigate }) => {
         transition={{ duration: 1 }}
         viewport={{ once: true, amount: 0.2 }}
       >
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 text-center md:text-left">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
           {/* Column 1: Logo & Tagline */}
-          <div className="flex flex-col items-center md:items-start col-span-1 md:col-span-1">
+          <div className="flex flex-col items-center md:items-start col-span-1">
             <div className="flex items-center gap-2 font-extrabold text-2xl mb-2">
               <Trophy className="w-7 h-7" />
               <span>HackHub</span>
@@ -208,25 +300,11 @@ const LandingPage = ({ onNavigate }) => {
               <a href="#" className="hover:underline">Contact Support</a>
             </div>
           </div>
-
-          {/* Column 4: Legal */}
-          <div>
-            <h3 className="font-bold mb-4 uppercase tracking-wider">Legal</h3>
-            <div className="flex flex-col gap-3 text-sm opacity-90">
-              <a href="#" className="hover:underline">Privacy Policy</a>
-              <a href="#" className="hover:underline">Terms of Service</a>
-            </div>
-          </div>
         </div>
 
-        {/* Bottom Bar: Copyright & Socials */}
-        <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-opacity-20 flex flex-col sm:flex-row justify-between items-center gap-6">
+        {/* Bottom Bar: Copyright */}
+        <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-opacity-20 flex justify-center items-center">
           <p className="text-sm opacity-60">© {new Date().getFullYear()} HackHub. All rights reserved.</p>
-          <div className="flex gap-6">
-            <a href="#" className="opacity-60 hover:opacity-100 transition-opacity"><Twitter /></a>
-            <a href="#" className="opacity-60 hover:opacity-100 transition-opacity"><Github /></a>
-            <a href="#" className="opacity-60 hover:opacity-100 transition-opacity"><Linkedin /></a>
-          </div>
         </div>
       </motion.footer>
 
