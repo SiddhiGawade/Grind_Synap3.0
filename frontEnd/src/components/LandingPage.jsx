@@ -110,8 +110,8 @@ const LandingPage = ({ onNavigate }) => {
 
   return (
     <>
-      {/* CSS Variables */}
-      <style jsx global>{`
+  {/* CSS Variables */}
+  <style>{`
         :root {
           /* Light Theme Colors */
           --light-bg-primary: #F2EDD1;     /* Light cream */
@@ -235,7 +235,7 @@ const LandingPage = ({ onNavigate }) => {
           background-color: rgba(118, 171, 174, 0.2);
           border-color: var(--border-color);
         }
-      `}</style>
+  `}</style>
 
       <div className="min-h-screen flex flex-col transition-colors duration-500 overflow-x-hidden bg-primary">
         {/* NAVBAR */}

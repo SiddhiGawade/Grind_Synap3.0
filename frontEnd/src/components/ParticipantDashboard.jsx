@@ -21,23 +21,15 @@ const ParticipantDashboard = () => {
 
   // Placeholder for dynamic data
   const [stats, setStats] = useState({
-    xpPoints: 1250,
-    certificatesEarned: 3,
-    hackathonsJoined: 5,
-    teamMembers: 3,
+    
   });
 
   const [leaderboardData, setLeaderboardData] = useState([
-    { id: 1, name: 'Ava', xp: 5800, rank: 1, avatar: '/avatars/Avatar-1.jpg' },
-    { id: 2, name: 'Liam', xp: 5200, rank: 2, avatar: '/avatars/Avatar-2.jpg' },
-    { id: 3, name: 'Mia', xp: 4950, rank: 3, avatar: '/avatars/Avatar-3.png' },
-    { id: 4, name: 'Elijah', xp: 4100, rank: 4, avatar: '/avatars/Avatar-2.jpg' },
-    { id: 5, name: 'Sophia', xp: 3850, rank: 5, avatar: '/avatars/Avatar-1.jpg' },
+    
   ]);
 
   const [certificates, setCertificates] = useState([
-    { id: 1, name: 'Certificate of Completion: SynapHack 2.0', date: 'Oct 2024' },
-    { id: 2, name: 'Top 10 Finisher: Web3 Hackathon', date: 'Sep 2024' },
+    
   ]);
 
   const avatars = [
@@ -46,6 +38,49 @@ const ParticipantDashboard = () => {
     '/avatars/Avatar-3.png',
     '/avatars/Avatar-2.jpg',
   ];
+
+  // Events loaded from backend for participants to register
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadEvents = async () => {
+      // Try proxy first, then direct backend as fallback
+      const urls = ['/api/events', 'http://localhost:4000/api/events'];
+      
+      for (const url of urls) {
+        try {
+          console.log(`Attempting to fetch events from: ${url}`);
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            console.log(`Successfully loaded ${data.length} events from ${url}`);
+            if (mounted) setEvents(Array.isArray(data) ? data : []);
+            return; // Success, exit the loop
+          } catch (parseErr) {
+            console.error(`Failed to parse response from ${url} as JSON. Response text:`, text);
+            throw parseErr;
+          }
+        } catch (err) {
+          console.error(`Error loading events from ${url}:`, err);
+          // Continue to next URL
+        }
+      }
+      
+      // If all URLs failed
+      console.error('Failed to load events from all URLs');
+      if (mounted) setEvents([]);
+      if (mounted) setEventsLoading(false);
+    };
+    
+    loadEvents().finally(() => {
+      if (mounted) setEventsLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   const handleEditProfileClick = () => {
     setProfileFormOpen(true);
@@ -101,7 +136,7 @@ const ParticipantDashboard = () => {
 
   return (
     <>
-      <style jsx global>{`
+  <style>{`
         :root {
           /* Light Theme Colors Only */
           --bg-primary: #F2EDD1;
@@ -136,7 +171,7 @@ const ParticipantDashboard = () => {
         .animate-slide-down { animation: slideDown 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-      `}</style>
+  `}</style>
 
       <div className="min-h-screen bg-primary font-sans">
         {/* Header */}
@@ -354,30 +389,77 @@ const ParticipantDashboard = () => {
           >
             <h3 className="text-lg font-bold text-primary mb-6">Current Events</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="p-4 bg-secondary rounded-lg border-2 border-themed">
-                <h4 className="font-bold text-primary">AI Innovation Challenge</h4>
-                <p className="text-sm text-primary opacity-70 mb-2">Build innovative AI solutions</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded-full">Active</span>
-                  <span className="text-xs text-primary opacity-60">5 days left</span>
-                </div>
-              </div>
-              <div className="p-4 bg-accent rounded-lg border-2 border-themed">
-                <h4 className="font-bold text-secondary">Web3 Hackathon</h4>
-                <p className="text-sm text-secondary opacity-70 mb-2">Decentralized app development</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full">Judging</span>
-                  <span className="text-xs text-secondary opacity-60">Results pending</span>
-                </div>
-              </div>
-              <div className="p-4 bg-primary rounded-lg border-2 border-themed">
-                <h4 className="font-bold text-primary">Mobile App Challenge</h4>
-                <p className="text-sm text-primary opacity-70 mb-2">Cross-platform mobile solutions</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded-full">Upcoming</span>
-                  <span className="text-xs text-primary opacity-60">Starts in 3 days</span>
-                </div>
-              </div>
+              {eventsLoading ? (
+                <div className="col-span-3 text-primary opacity-70">Loading events...</div>
+              ) : events.length === 0 ? (
+                <div className="col-span-3 text-primary opacity-60">No active events yet.</div>
+              ) : (
+                events.map((ev) => {
+                  // Calculate event status based on dates
+                  const today = new Date();
+                  const startDate = new Date(ev.startDate);
+                  const endDate = new Date(ev.endDate);
+                  
+                  let eventStatus = 'Active';
+                  let statusColor = 'bg-green-200 text-green-800';
+                  let timeInfo = '';
+                  
+                  if (today < startDate) {
+                    eventStatus = 'Upcoming';
+                    statusColor = 'bg-blue-200 text-blue-800';
+                    const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
+                    timeInfo = `Starts in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
+                  } else if (today > endDate) {
+                    eventStatus = 'Ended';
+                    statusColor = 'bg-gray-200 text-gray-800';
+                    timeInfo = 'Event ended';
+                  } else {
+                    eventStatus = 'Active';
+                    statusColor = 'bg-green-200 text-green-800';
+                    const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                    timeInfo = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
+                  }
+                  
+                  return (
+                    <div
+                      key={ev.id || ev.eventCode || ev.event_code}
+                      className={`p-4 rounded-lg border-2 border-themed ${eventStatus === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}
+                    >
+                      <h4 className="font-bold text-primary">
+                        {ev.eventTitle || ev.title || ev.name || 'Untitled Event'}
+                      </h4>
+                      {ev.eventDescription && (
+                        <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>
+                      )}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
+                          {eventStatus}
+                        </span>
+                        <span className="text-xs text-primary opacity-60">{timeInfo}</span>
+                      </div>
+                      <div className="text-xs text-primary opacity-50 mb-3">
+                        {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-primary opacity-60">
+                          Code: {ev.eventCode || ev.event_code}
+                        </span>
+                        <button
+                          className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
+                          disabled={eventStatus === 'Ended'}
+                          onClick={() => {
+                            // For now, just log the event details
+                            console.log('Register for event:', ev);
+                            alert(`Registering for: ${ev.eventTitle}\nEvent Code: ${ev.eventCode}`);
+                          }}
+                        >
+                          {eventStatus === 'Ended' ? 'Ended' : 'Register'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
           </motion.div>
         </main>
