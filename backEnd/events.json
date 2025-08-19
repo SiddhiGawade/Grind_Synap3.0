@@ -57,5 +57,66 @@
     "announcements": [],
     "eventCode": "URZ44T",
     "createdAt": "2025-08-19T06:33:28.758Z"
+  },
+  {
+    "id": "1755586967125",
+    "name": "Siddhi Balasaheb Gawade",
+    "email": "siddhi9805@gmail.com",
+    "aadhar": "123412341234",
+    "organization": "aa",
+    "designation": "Student",
+    "eventTitle": "aa",
+    "eventDescription": "aa",
+    "startDate": "2025-08-19",
+    "endDate": "2025-07-27",
+    "numberOfMentors": 0,
+    "authorizedJudges": [
+      "siddhigawade.sbg25@gmail.com"
+    ],
+    "announcements": [],
+    "eventCode": "KDB8JY",
+    "createdAt": "2025-08-19T07:02:47.125Z"
+  },
+  {
+    "id": "1755587368998",
+    "name": "Siddhi Balasaheb Gawade",
+    "email": "siddhi9805@gmail.com",
+    "aadhar": "123412341234qqqqqqqq",
+    "organization": "111",
+    "designation": "123",
+    "eventTitle": "sss",
+    "eventDescription": "ssss",
+    "startDate": "2025-08-13",
+    "endDate": "2025-08-16",
+    "numberOfMentors": 1,
+    "authorizedJudges": [
+      "siddhigawade.sbg25@gmail.com",
+      "judge@test.com",
+      "alice.judge@example.com"
+    ],
+    "announcements": [],
+    "eventCode": "Z57F8A",
+    "createdAt": "2025-08-19T07:09:28.998Z"
+  },
+  {
+    "id": "1755587436456",
+    "name": "Siddhi Balasaheb Gawade",
+    "email": "siddhi9805@gmail.com",
+    "aadhar": "123412341234qqqqqqqq",
+    "organization": "111",
+    "designation": "123",
+    "eventTitle": "sss",
+    "eventDescription": "ssss",
+    "startDate": "2025-08-13",
+    "endDate": "2025-08-16",
+    "numberOfMentors": 1,
+    "authorizedJudges": [
+      "siddhigawade.sbg25@gmail.com",
+      "judge@test.com",
+      "alice.judge@example.com"
+    ],
+    "announcements": [],
+    "eventCode": "PXH5NX",
+    "createdAt": "2025-08-19T07:10:36.456Z"
   }
 ]
