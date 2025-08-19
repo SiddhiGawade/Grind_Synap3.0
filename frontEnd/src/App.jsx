@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import SignupPage from './components/SignupPage';
 import SigninPage from './components/SigninPage';
 import ParticipantDashboard from './components/ParticipantDashboard';
