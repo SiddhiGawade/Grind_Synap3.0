@@ -82,25 +82,26 @@ app.post('/api/upload-base64', async (req, res) => {
 });
 
 // Also expose /api/upload as a fallback when multer isn't available so front-end doesn't get 404
-app.post('/api/upload', async (req, res) => {
-  try {
-    if (multer) return res.status(400).json({ error: 'Multer upload should handle this request' });
-    const { filename, data } = req.body || {};
-    if (!filename || !data) return res.status(400).json({ error: 'Missing filename or data' });
-    try { await fs.mkdir(UPLOADS_DIR, { recursive: true }); } catch (e) {}
-    const safe = filename.replace(/[^a-zA-Z0-9.\-\_]/g, '_');
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9) + '-' + safe;
-    const dest = path.join(UPLOADS_DIR, unique);
-    const base64 = data.includes('base64,') ? data.split('base64,')[1] : data;
-    const buffer = Buffer.from(base64, 'base64');
-    await fs.writeFile(dest, buffer);
-    const url = `/uploads/${unique}`;
-    return res.json({ url, filename: unique });
-  } catch (err) {
-    console.error('fallback upload failed', err);
-    return res.status(500).json({ error: 'Upload failed' });
-  }
-});
+if (!multer) {
+  app.post('/api/upload', async (req, res) => {
+    try {
+      const { filename, data } = req.body || {};
+      if (!filename || !data) return res.status(400).json({ error: 'Missing filename or data' });
+      try { await fs.mkdir(UPLOADS_DIR, { recursive: true }); } catch (e) {}
+      const safe = filename.replace(/[^a-zA-Z0-9.\-\_]/g, '_');
+      const unique = Date.now() + '-' + Math.round(Math.random() * 1e9) + '-' + safe;
+      const dest = path.join(UPLOADS_DIR, unique);
+      const base64 = data.includes('base64,') ? data.split('base64,')[1] : data;
+      const buffer = Buffer.from(base64, 'base64');
+      await fs.writeFile(dest, buffer);
+      const url = `/uploads/${unique}`;
+      return res.json({ url, filename: unique });
+    } catch (err) {
+      console.error('fallback upload failed', err);
+      return res.status(500).json({ error: 'Upload failed' });
+    }
+  });
+}
 
 // Initialize Supabase admin client if service key is provided
 let supabaseAdmin = null;
@@ -149,50 +150,51 @@ async function writeEvents(events) {
   await fs.writeFile(EVENTS_FILE, JSON.stringify(events, null, 2));
 }
 
-// Map a Supabase row (snake_case) to camelCase keys used by the rest of the app
+// Fixed mapEventRow function - ensures all fields are properly mapped
 function mapEventRow(row) {
   if (!row) return null;
   return {
     id: row.id,
     name: row.name,
     email: row.email,
-    aadhar: row.aadhar || row.aadhar,
-    organization: row.organization || row.organization,
-    designation: row.designation || row.designation,
-    eventTitle: row.event_title || row.eventTitle || null,
-    eventDescription: row.event_description || row.eventDescription || null,
-    startDate: row.start_date || row.startDate || null,
-    startTime: row.start_time || row.startTime || null,
-    endDate: row.end_date || row.endDate || null,
-    endTime: row.end_time || row.endTime || null,
+    aadhar: row.aadhar,
+    organization: row.organization,
+    designation: row.designation,
+    eventType: row.event_type || row.eventType || 'event',
+    eventTitle: row.event_title || row.eventTitle,
+    eventDescription: row.event_description || row.eventDescription,
+    startDate: row.start_date || row.startDate,
+    startTime: row.start_time || row.startTime,
+    endDate: row.end_date || row.endDate,
+    endTime: row.end_time || row.endTime,
     numberOfMentors: row.number_of_mentors != null ? row.number_of_mentors : (row.numberOfMentors || 0),
     authorizedJudges: Array.isArray(row.authorized_judges) ? row.authorized_judges : (row.authorizedJudges || []),
-    judgeEmailsText: row.judge_emails_text || row.judgeEmailsText || undefined,
+    
     // Hackathon specific fields
-    hackathonMode: row.hackathon_mode || row.hackathonMode || null,
-    venue: row.venue || null,
-    registrationDeadline: row.registration_deadline || row.registrationDeadline || null,
-    eligibility: row.eligibility || null,
-    minTeamSize: row.min_team_size || row.minTeamSize || null,
-    maxTeamSize: row.max_team_size || row.maxTeamSize || null,
-    maxParticipants: row.max_participants || row.maxParticipants || null,
-    themes: row.themes || null,
+    hackathonMode: row.hackathon_mode || row.hackathonMode,
+    venue: row.venue,
+    registrationDeadline: row.registration_deadline || row.registrationDeadline,
+    eligibility: row.eligibility,
+    minTeamSize: row.min_team_size || row.minTeamSize,
+    maxTeamSize: row.max_team_size || row.maxTeamSize,
+    maxParticipants: row.max_participants || row.maxParticipants,
+    themes: row.themes,
     tracks: Array.isArray(row.tracks) ? row.tracks : (row.tracks || []),
-    submissionGuidelines: row.submission_guidelines || row.submissionGuidelines || null,
-    evaluationCriteria: row.evaluation_criteria || row.evaluationCriteria || null,
-    prizeDetails: row.prize_details || row.prizeDetails || null,
+    submissionGuidelines: row.submission_guidelines || row.submissionGuidelines,
+    evaluationCriteria: row.evaluation_criteria || row.evaluationCriteria,
+    prizeDetails: row.prize_details || row.prizeDetails,
     participationCertificates: row.participation_certificates != null ? row.participation_certificates : (row.participationCertificates || false),
+    
     // Event specific fields
-    eventCategory: row.event_category || row.eventCategory || null,
-    eventMode: row.event_mode || row.eventMode || null,
-    registrationFee: row.registration_fee || row.registrationFee || null,
+    eventCategory: row.event_category || row.eventCategory,
+    eventMode: row.event_mode || row.eventMode,
+    registrationFee: row.registration_fee || row.registrationFee,
+    
+    // General fields
     announcements: Array.isArray(row.announcements) ? row.announcements : (row.announcements || []),
-    eventCode: row.event_code || row.eventCode || null,
-    eventType: row.event_type || row.eventType || null,
-    createdAt: row.created_at || row.createdAt || null,
-    updatedAt: row.updated_at || row.updatedAt || null,
-    // passthrough any other fields that might exist
-    _raw: row
+    eventCode: row.event_code || row.eventCode,
+    createdAt: row.created_at || row.createdAt,
+    updatedAt: row.updated_at || row.updatedAt
   };
 }
 
@@ -675,50 +677,73 @@ app.get('/api/judges', async (req, res) => {
   }
 });
 
-// --- replace the POST /api/events, GET /api/events, PUT/DELETE, validate-judge, announcements endpoints
-// with versions that use supabase when available, otherwise fallback to file-based storage:
-
-// Create event (Supabase if configured)
+// Create event (Supabase if configured) - FIXED VERSION
 app.post('/api/events', async (req, res) => {
   try {
+    console.log('=== EVENT CREATION REQUEST ===');
+    console.log('Request body keys:', Object.keys(req.body || {}));
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    
     const data = req.body || {};
     if (!data.eventTitle || !data.name || !data.email) {
       return res.status(400).json({ error: 'Missing required fields: eventTitle, name, email' });
     }
 
-    // Normalize fields
+    // Normalize fields - handle both camelCase and snake_case from frontend
     const eventPayload = {
       id: Date.now().toString(),
-  eventType: data.eventType || data.event_type || 'event',
+      eventType: data.eventType || data.event_type || 'event',
       name: data.name,
       email: data.email,
-      aadhar: data.aadhar || null,
-      organization: data.organization || null,
-      designation: data.designation || null,
-      eventTitle: data.eventTitle,
-      eventDescription: data.eventDescription || null,
-      startDate: data.startDate || null,
-      endDate: data.endDate || null,
-      numberOfMentors: typeof data.numberOfMentors === 'number' ? data.numberOfMentors : (Number(data.numberOfMentors) || 0),
-      authorizedJudges: Array.isArray(data.authorizedJudges) ? data.authorizedJudges : (Array.isArray(data.judgeEmails) ? data.judgeEmails : []),
+      aadhar: data.aadhar,
+      organization: data.organization,
+      designation: data.designation,
+      eventTitle: data.eventTitle || data.event_title,
+      eventDescription: data.eventDescription || data.event_description,
+      startDate: data.startDate || data.start_date,
+      startTime: data.startTime || data.start_time,
+      endDate: data.endDate || data.end_date,
+      endTime: data.endTime || data.end_time,
+      numberOfMentors: typeof data.numberOfMentors === 'number' ? data.numberOfMentors : (Number(data.numberOfMentors) || Number(data.number_of_mentors) || 0),
+      authorizedJudges: Array.isArray(data.authorizedJudges) ? data.authorizedJudges : (Array.isArray(data.authorized_judges) ? data.authorized_judges : (Array.isArray(data.judgeEmails) ? data.judgeEmails : [])),
+      
+      // Hackathon specific fields
+      hackathonMode: data.hackathonMode || data.hackathon_mode,
+      venue: data.venue,
+      registrationDeadline: data.registrationDeadline || data.registration_deadline,
+      eligibility: data.eligibility,
+      minTeamSize: data.minTeamSize || data.min_team_size,
+      maxTeamSize: data.maxTeamSize || data.max_team_size,
+      maxParticipants: data.maxParticipants || data.max_participants,
+      themes: data.themes,
+      tracks: Array.isArray(data.tracks) ? data.tracks : (data.tracks ? [data.tracks] : []),
+      submissionGuidelines: data.submissionGuidelines || data.submission_guidelines,
+      evaluationCriteria: data.evaluationCriteria || data.evaluation_criteria,
+      prizeDetails: data.prizeDetails || data.prize_details,
+      participationCertificates: data.participationCertificates != null ? data.participationCertificates : (data.participation_certificates != null ? data.participation_certificates : false),
+      
+      // Event specific fields
+      eventCategory: data.eventCategory || data.event_category,
+      eventMode: data.eventMode || data.event_mode,
+      registrationFee: data.registrationFee || data.registration_fee,
+      
       announcements: Array.isArray(data.announcements) ? data.announcements : [],
       createdAt: new Date().toISOString()
     };
 
-    // generate eventCode if not provided
+    // Generate eventCode if not provided
     let code = (data.eventCode && String(data.eventCode).trim()) ? String(data.eventCode).trim() : generateEventCode(6);
 
     if (supabaseAdmin) {
-      // ensure uniqueness of code
+      // Ensure uniqueness of code
       let attempts = 0;
       const existingCodes = new Set((await supabaseAdmin.from('events').select('event_code')).data?.map(r => (r.event_code || '').toUpperCase()) || []);
       while (existingCodes.has(code.toUpperCase()) && attempts < 10) {
         code = generateEventCode(6);
         attempts++;
       }
-      // build snake_case payload for Postgres
-      // IMPORTANT: do NOT send a non-UUID `id` to Supabase if your table's id is uuid
-      // let the DB generate the UUID by omitting id from the insert payload
+      
+      // Build snake_case payload for Postgres (omit id to let DB generate UUID)
       const insertPayload = {
         event_type: eventPayload.eventType,
         name: eventPayload.name,
@@ -734,6 +759,7 @@ app.post('/api/events', async (req, res) => {
         end_time: eventPayload.endTime,
         number_of_mentors: eventPayload.numberOfMentors,
         authorized_judges: eventPayload.authorizedJudges,
+        
         // Hackathon specific fields
         hackathon_mode: eventPayload.hackathonMode,
         venue: eventPayload.venue,
@@ -748,23 +774,31 @@ app.post('/api/events', async (req, res) => {
         evaluation_criteria: eventPayload.evaluationCriteria,
         prize_details: eventPayload.prizeDetails,
         participation_certificates: eventPayload.participationCertificates,
+        
         // Event specific fields
         event_category: eventPayload.eventCategory,
         event_mode: eventPayload.eventMode,
         registration_fee: eventPayload.registrationFee,
+        
         announcements: eventPayload.announcements,
         event_code: code,
         created_at: eventPayload.createdAt
       };
 
+      console.log('=== SUPABASE INSERT PAYLOAD ===');
+      console.log(JSON.stringify(insertPayload, null, 2));
+
       const { data: created, error } = await supabaseInsertWithColumnRetry('events', insertPayload);
       if (error) {
-        console.error('Supabase insert event error', error);
+        console.error('=== SUPABASE INSERT ERROR ===');
+        console.error('Error details:', JSON.stringify(error, null, 2));
         return res.status(500).json({ error: 'Failed to create event' });
       }
+      console.log('=== SUPABASE INSERT SUCCESS ===');
+      console.log('Created event data:', JSON.stringify(created, null, 2));
       return res.status(201).json({ message: 'Event created', event: mapEventRow(created) });
     } else {
-      // fallback file-backed
+      // Fallback file-backed
       const events = await readEvents();
       const existingCodes = new Set(events.map(e => (e.eventCode || '').toUpperCase()));
       let attempts = 0;
@@ -787,13 +821,13 @@ app.post('/api/events', async (req, res) => {
 app.get('/api/events', async (req, res) => {
   try {
     if (supabaseAdmin) {
-  const { data, error } = await supabaseAdmin.from('events').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabaseAdmin.from('events').select('*').order('created_at', { ascending: false });
       if (error) {
         console.error('Supabase fetch events error', error);
         return res.status(500).json({ error: 'Failed to fetch events' });
       }
-  // map snake_case rows to camelCase
-  return res.json((data || []).map(mapEventRow));
+      // map snake_case rows to camelCase
+      return res.json((data || []).map(mapEventRow));
     } else {
       const events = await readEvents();
       return res.json(events);
@@ -804,7 +838,7 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
-// Update event
+// Update event - FIXED VERSION
 app.put('/api/events/:id', async (req, res) => {
   try {
     const id = req.params.id;
@@ -816,32 +850,55 @@ app.put('/api/events/:id', async (req, res) => {
         ...payload,
         numberOfMentors: typeof payload.numberOfMentors === 'number' ? payload.numberOfMentors : (payload.numberOfMentors ? Number(payload.numberOfMentors) : undefined)
       };
-      // prevent accidentally removing createdAt
+      // Prevent accidentally removing createdAt
       delete updatePayload.createdAt;
 
-  // translate updatePayload to snake_case for Postgres
-  const snakeUpdate = {};
-  if (updatePayload.name !== undefined) snakeUpdate.name = updatePayload.name;
-  if (updatePayload.email !== undefined) snakeUpdate.email = updatePayload.email;
-  if (updatePayload.aadhar !== undefined) snakeUpdate.aadhar = updatePayload.aadhar;
-  if (updatePayload.organization !== undefined) snakeUpdate.organization = updatePayload.organization;
-  if (updatePayload.designation !== undefined) snakeUpdate.designation = updatePayload.designation;
-  if (updatePayload.eventTitle !== undefined) snakeUpdate.event_title = updatePayload.eventTitle;
-  if (updatePayload.eventDescription !== undefined) snakeUpdate.event_description = updatePayload.eventDescription;
-  if (updatePayload.startDate !== undefined) snakeUpdate.start_date = updatePayload.startDate;
-  if (updatePayload.endDate !== undefined) snakeUpdate.end_date = updatePayload.endDate;
-  if (updatePayload.numberOfMentors !== undefined) snakeUpdate.number_of_mentors = updatePayload.numberOfMentors;
-  if (updatePayload.authorizedJudges !== undefined) snakeUpdate.authorized_judges = updatePayload.authorizedJudges;
-  if (updatePayload.announcements !== undefined) snakeUpdate.announcements = updatePayload.announcements;
-  if (updatePayload.eventCode !== undefined) snakeUpdate.event_code = updatePayload.eventCode;
-  if (updatePayload.eventType !== undefined) snakeUpdate.event_type = updatePayload.eventType;
+      // Translate updatePayload to snake_case for Postgres
+      const snakeUpdate = {};
+      if (updatePayload.name !== undefined) snakeUpdate.name = updatePayload.name;
+      if (updatePayload.email !== undefined) snakeUpdate.email = updatePayload.email;
+      if (updatePayload.aadhar !== undefined) snakeUpdate.aadhar = updatePayload.aadhar;
+      if (updatePayload.organization !== undefined) snakeUpdate.organization = updatePayload.organization;
+      if (updatePayload.designation !== undefined) snakeUpdate.designation = updatePayload.designation;
+      if (updatePayload.eventTitle !== undefined) snakeUpdate.event_title = updatePayload.eventTitle;
+      if (updatePayload.eventDescription !== undefined) snakeUpdate.event_description = updatePayload.eventDescription;
+      if (updatePayload.startDate !== undefined) snakeUpdate.start_date = updatePayload.startDate;
+      if (updatePayload.startTime !== undefined) snakeUpdate.start_time = updatePayload.startTime;
+      if (updatePayload.endDate !== undefined) snakeUpdate.end_date = updatePayload.endDate;
+      if (updatePayload.endTime !== undefined) snakeUpdate.end_time = updatePayload.endTime;
+      if (updatePayload.numberOfMentors !== undefined) snakeUpdate.number_of_mentors = updatePayload.numberOfMentors;
+      if (updatePayload.authorizedJudges !== undefined) snakeUpdate.authorized_judges = updatePayload.authorizedJudges;
+      
+      // Hackathon specific fields
+      if (updatePayload.hackathonMode !== undefined) snakeUpdate.hackathon_mode = updatePayload.hackathonMode;
+      if (updatePayload.venue !== undefined) snakeUpdate.venue = updatePayload.venue;
+      if (updatePayload.registrationDeadline !== undefined) snakeUpdate.registration_deadline = updatePayload.registrationDeadline;
+      if (updatePayload.eligibility !== undefined) snakeUpdate.eligibility = updatePayload.eligibility;
+      if (updatePayload.minTeamSize !== undefined) snakeUpdate.min_team_size = updatePayload.minTeamSize;
+      if (updatePayload.maxTeamSize !== undefined) snakeUpdate.max_team_size = updatePayload.maxTeamSize;
+      if (updatePayload.maxParticipants !== undefined) snakeUpdate.max_participants = updatePayload.maxParticipants;
+      if (updatePayload.themes !== undefined) snakeUpdate.themes = updatePayload.themes;
+      if (updatePayload.tracks !== undefined) snakeUpdate.tracks = updatePayload.tracks;
+      if (updatePayload.submissionGuidelines !== undefined) snakeUpdate.submission_guidelines = updatePayload.submissionGuidelines;
+      if (updatePayload.evaluationCriteria !== undefined) snakeUpdate.evaluation_criteria = updatePayload.evaluationCriteria;
+      if (updatePayload.prizeDetails !== undefined) snakeUpdate.prize_details = updatePayload.prizeDetails;
+      if (updatePayload.participationCertificates !== undefined) snakeUpdate.participation_certificates = updatePayload.participationCertificates;
+      
+      // Event specific fields
+      if (updatePayload.eventCategory !== undefined) snakeUpdate.event_category = updatePayload.eventCategory;
+      if (updatePayload.eventMode !== undefined) snakeUpdate.event_mode = updatePayload.eventMode;
+      if (updatePayload.registrationFee !== undefined) snakeUpdate.registration_fee = updatePayload.registrationFee;
+      
+      if (updatePayload.announcements !== undefined) snakeUpdate.announcements = updatePayload.announcements;
+      if (updatePayload.eventCode !== undefined) snakeUpdate.event_code = updatePayload.eventCode;
+      if (updatePayload.eventType !== undefined) snakeUpdate.event_type = updatePayload.eventType;
 
-  const { data: updated, error } = await supabaseUpdateWithColumnRetry('events', 'id', id, snakeUpdate);
+      const { data: updated, error } = await supabaseUpdateWithColumnRetry('events', 'id', id, snakeUpdate);
       if (error) {
         console.error('Supabase update event error', error);
         return res.status(500).json({ error: 'Failed to update event' });
       }
-  return res.json({ message: 'Event updated', event: mapEventRow(updated) });
+      return res.json({ message: 'Event updated', event: mapEventRow(updated) });
     } else {
       const events = await readEvents();
       const idx = events.findIndex((e) => e.id === id);
@@ -867,12 +924,12 @@ app.delete('/api/events/:id', async (req, res) => {
   try {
     const id = req.params.id;
     if (supabaseAdmin) {
-  const { data: deleted, error } = await supabaseAdmin.from('events').delete().eq('id', id).select().single();
+      const { data: deleted, error } = await supabaseAdmin.from('events').delete().eq('id', id).select().single();
       if (error) {
         console.error('Supabase delete error', error);
         return res.status(500).json({ error: 'Failed to delete event' });
       }
-  return res.json({ message: 'Event deleted', event: mapEventRow(deleted) });
+      return res.json({ message: 'Event deleted', event: mapEventRow(deleted) });
     } else {
       const events = await readEvents();
       const idx = events.findIndex((e) => e.id === id);
@@ -930,20 +987,20 @@ app.post('/api/events/:id/announcements', async (req, res) => {
 
     if (supabaseAdmin) {
       // fetch existing announcements, append, update
-  const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
+      const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
       if (fetchErr) {
         console.error('Supabase fetch event for announcements', fetchErr);
         return res.status(404).json({ error: 'Event not found' });
       }
-  const current = Array.isArray(ev.announcements) ? ev.announcements : [];
+      const current = Array.isArray(ev.announcements) ? ev.announcements : [];
       const announcement = { id: Date.now().toString(), text, author: author || 'Creator', createdAt: new Date().toISOString() };
       const updated = [...current, announcement];
-  const { data: updatedRow, error: updErr } = await supabaseUpdateWithColumnRetry('events', 'id', id, { announcements: updated });
+      const { data: updatedRow, error: updErr } = await supabaseUpdateWithColumnRetry('events', 'id', id, { announcements: updated });
       if (updErr) {
         console.error('Supabase update announcements error', updErr);
         return res.status(500).json({ error: 'Failed to add announcement' });
       }
-  return res.status(201).json({ message: 'Announcement added', announcement });
+      return res.status(201).json({ message: 'Announcement added', announcement });
     } else {
       const events = await readEvents();
       const idx = events.findIndex((e) => e.id === id);
@@ -968,14 +1025,14 @@ app.delete('/api/events/:id/announcements/:aid', async (req, res) => {
     const aid = req.params.aid;
     if (supabaseAdmin) {
       // fetch, filter, update
-  const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
+      const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
       if (fetchErr) {
         console.error('Supabase fetch event for announcements delete', fetchErr);
         return res.status(404).json({ error: 'Event not found' });
       }
       const current = Array.isArray(ev.announcements) ? ev.announcements : [];
       const filtered = current.filter(a => a.id !== aid);
-  const { data: updatedRow, error: updErr } = await supabaseUpdateWithColumnRetry('events', 'id', id, { announcements: filtered });
+      const { data: updatedRow, error: updErr } = await supabaseUpdateWithColumnRetry('events', 'id', id, { announcements: filtered });
       if (updErr) {
         console.error('Supabase update announcements delete error', updErr);
         return res.status(500).json({ error: 'Failed to delete announcement' });
