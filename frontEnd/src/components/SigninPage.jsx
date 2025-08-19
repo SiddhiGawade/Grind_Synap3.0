@@ -3,28 +3,24 @@ import { Users, Calendar, Trophy, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lu
 import { useAuth } from '../context/AuthContext.jsx';
 
 const SigninPage = ({ onNavigate }) => {
-  const { login, setLoading } = useAuth();
+  const { signin } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     role: 'participant'
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      login({
-        name: 'John Doe',
-        email: formData.email,
-        role: formData.role
-      });
-      setLoading(false);
+    setError(null);
+    const res = await signin({ email: formData.email, password: formData.password, role: formData.role });
+    if (res.ok) {
       onNavigate('dashboard');
-    }, 1000);
+    } else {
+      setError(res.error || 'Signin failed');
+    }
   };
 
   return (
@@ -50,6 +46,11 @@ const SigninPage = ({ onNavigate }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="text-sm text-red-700 bg-red-50 border border-red-100 p-2 rounded">
+                {error}
+              </div>
+            )}
             {/* Role Selection */}
             <div>
               <label className="block text-sm font-medium text-[#151616] mb-2">Login as</label>
@@ -89,6 +90,7 @@ const SigninPage = ({ onNavigate }) => {
                 <input
                   type="email"
                   required
+                  autoComplete="email"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[#151616] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D6F32F] focus:border-[#D6F32F]"
                   placeholder="Enter your email"
                   value={formData.email}
@@ -105,6 +107,7 @@ const SigninPage = ({ onNavigate }) => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="current-password"
                   className="w-full pl-10 pr-12 py-3 border-2 border-[#151616] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D6F32F] focus:border-[#D6F32F]"
                   placeholder="Enter your password"
                   value={formData.password}
@@ -123,7 +126,8 @@ const SigninPage = ({ onNavigate }) => {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full bg-[#D6F32F] py-3 px-4 rounded-lg border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616] hover:shadow-[2px_2px_0px_0px_#151616] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-bold text-[#151616] flex items-center justify-center gap-2"
+              disabled={/* loading comes from context */ false}
+              className="w-full bg-[#D6F32F] py-3 px-4 rounded-lg border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616] hover:shadow-[2px_2px_0px_0px_#151616] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-bold text-[#151616] flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Sign In
               <ArrowRight className="w-5 h-5" />
@@ -143,7 +147,7 @@ const SigninPage = ({ onNavigate }) => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .bg-pattern {
           background-image: radial-gradient(#151616 1px, transparent 1px);
           background-size: 24px 24px;

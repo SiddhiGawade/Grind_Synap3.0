@@ -3,7 +3,8 @@ import { Users, Calendar, Trophy, User, Mail, Lock, Eye, EyeOff, ArrowRight } fr
 import { useAuth } from '../context/AuthContext.jsx';
 
 const SignupPage = ({ onNavigate }) => {
-  const { setLoading } = useAuth();
+  const { signup, loading } = useAuth();
+  const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,16 +18,24 @@ const SignupPage = ({ onNavigate }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match');
+      setError('Passwords do not match');
       return;
     }
-    
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+
+    // Call signup from context
+    setError(null);
+    const res = await signup({
+      name: formData.name,
+      email: formData.email,
+      password: formData.password,
+      role: formData.role,
+    });
+
+    if (res.ok) {
       onNavigate('signin');
-    }, 1000);
+    } else {
+      setError(res.error || 'Signup failed');
+    }
   };
 
   return (
@@ -52,6 +61,11 @@ const SignupPage = ({ onNavigate }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="text-sm text-red-700 bg-red-50 border border-red-100 p-2 rounded">
+                {error}
+              </div>
+            )}
             {/* Name Input */}
             <div>
               <label className="block text-sm font-medium text-[#151616] mb-2">Full Name</label>
@@ -60,6 +74,7 @@ const SignupPage = ({ onNavigate }) => {
                 <input
                   type="text"
                   required
+                  autoComplete="name"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[#151616] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D6F32F] focus:border-[#D6F32F]"
                   placeholder="Enter your full name"
                   value={formData.name}
@@ -76,6 +91,7 @@ const SignupPage = ({ onNavigate }) => {
                 <input
                   type="email"
                   required
+                  autoComplete="email"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[#151616] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D6F32F] focus:border-[#D6F32F]"
                   placeholder="Enter your email"
                   value={formData.email}
@@ -123,6 +139,7 @@ const SignupPage = ({ onNavigate }) => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="new-password"
                   className="w-full pl-10 pr-12 py-3 border-2 border-[#151616] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D6F32F] focus:border-[#D6F32F]"
                   placeholder="Create a password"
                   value={formData.password}
@@ -146,6 +163,7 @@ const SignupPage = ({ onNavigate }) => {
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
+                  autoComplete="new-password"
                   className="w-full pl-10 pr-12 py-3 border-2 border-[#151616] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D6F32F] focus:border-[#D6F32F]"
                   placeholder="Confirm your password"
                   value={formData.confirmPassword}
@@ -164,7 +182,8 @@ const SignupPage = ({ onNavigate }) => {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full bg-[#D6F32F] py-3 px-4 rounded-lg border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616] hover:shadow-[2px_2px_0px_0px_#151616] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-bold text-[#151616] flex items-center justify-center gap-2"
+              disabled={loading}
+              className="w-full bg-[#D6F32F] py-3 px-4 rounded-lg border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616] hover:shadow-[2px_2px_0px_0px_#151616] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-bold text-[#151616] flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Create Account
               <ArrowRight className="w-5 h-5" />
@@ -184,7 +203,7 @@ const SignupPage = ({ onNavigate }) => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .bg-pattern {
           background-image: radial-gradient(#151616 1px, transparent 1px);
           background-size: 24px 24px;
