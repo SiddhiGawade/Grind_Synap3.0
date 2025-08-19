@@ -7,8 +7,7 @@ const SigninPage = ({ onNavigate }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    role: 'participant',
-    eventId: ''
+  role: 'participant'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
@@ -169,23 +168,7 @@ const SigninPage = ({ onNavigate }) => {
                 </div>
               </div>
 
-              {/* Event ID for judges */}
-              {formData.role === 'judge' && (
-                <div>
-                  <label className="block text-sm font-medium text-primary mb-2">Event ID</label>
-                  <input
-                    type="text"
-                    required
-                    className="input-field w-full py-3 px-4 border-2 rounded-lg focus:outline-none focus:ring-2"
-                    placeholder="Enter Event ID provided by organizer"
-                    value={formData.eventId}
-                    onChange={(e) => setFormData({...formData, eventId: e.target.value})}
-                  />
-                  <div className="text-xs text-primary opacity-60 mt-2">
-                    Judges must use the Event ID and credentials authorized by the event creator.
-                  </div>
-                </div>
-              )}
+              {/* Judges sign in with email & password only; event codes removed */}
 
               {/* Submit Button */}
               <button

@@ -219,7 +219,7 @@ function AuthProvider({ children }) {
     }
   };
 
-  const signin = async ({ email, password, role, eventId } = {}) => {
+  const signin = async ({ email, password, role } = {}) => {
     console.log('Sign-in started with role:', role);
     setLoading(true);
     try {
@@ -266,49 +266,15 @@ function AuthProvider({ children }) {
         }
 
         // Step 2: Validate role with backend if role is specified
-        if (role) {
-          console.log('Validating role with backend:', role);
-            try {
-            const roleRes = await fetch(`${API_BASE}/api/auth/signin`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, password: 'dummy', role, eventId }),
-            });
-
-            const roleData = await roleRes.json();
-            console.log('Backend role validation response:', roleData);
-            if (!roleRes.ok || !roleData.user) {
-              // Role validation failed - sign out from Supabase
-              await supabaseClient.auth.signOut();
-              setLoading(false);
-              throw new Error('Invalid email or password');
-            }
-
-            // Use validated profile data from backend
-            console.log('Setting user from backend validation:', roleData.user);
-            setUser({
-              id: roleData.user.id,
-              email: roleData.user.email,
-              name: roleData.user.name,
-              role: roleData.user.role
-            });
-          } catch (roleError) {
-            console.error('Role validation error:', roleError);
-            await supabaseClient.auth.signOut();
-            setLoading(false);
-            throw new Error('Invalid email or password');
-          }
-        } else {
-          // No role validation needed - use Supabase user data
-          const meta = supabaseUser.user_metadata || {};
-          console.log('Setting user from Supabase data:', { id: supabaseUser.id, email: supabaseUser.email, name: meta.name, role: meta.role });
-          setUser({
-            id: supabaseUser.id,
-            email: supabaseUser.email,
-            name: meta.name || '',
-            role: meta.role || 'participant'
-          });
-        }
+        // Use Supabase user data directly - role is read from user_metadata
+        const meta = supabaseUser.user_metadata || {};
+        console.log('Setting user from Supabase data:', { id: supabaseUser.id, email: supabaseUser.email, name: meta.name, role: meta.role });
+        setUser({
+          id: supabaseUser.id,
+          email: supabaseUser.email,
+          name: meta.name || '',
+          role: meta.role || 'participant'
+        });
 
         setLoading(false);
         console.log('Sign-in completed successfully');
@@ -316,11 +282,11 @@ function AuthProvider({ children }) {
       }
 
       // Fallback to backend API (when Supabase not configured)
-      const res = await fetch(`${API_BASE}/api/auth/signin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email, password, role, eventId }),
-      });
+  const res = await fetch(`${API_BASE}/api/auth/signin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email, password, role }),
+  });
       const data = await res.json();
       setLoading(false);
       if (!res.ok) {

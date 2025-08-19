@@ -410,7 +410,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
 app.post('/api/auth/signin', async (req, res) => {
   try {
-  const { email, password, role, eventId } = req.body || {};
+  const { email, password, role } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: 'Missing email or password' });
     }
@@ -440,13 +440,7 @@ app.post('/api/auth/signin', async (req, res) => {
             return res.status(401).json({ error: 'Invalid email or password' });
           }
 
-          // If judge role and eventId provided, validate authorized judges for that event
-          if (role === 'judge' && eventId) {
-            const ev = await findEventByIdOrCode(String(eventId));
-            if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
-            const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
-            if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
-          }
+          // No event-code based judge validation; judges authenticate with email/password only
 
           // Return file-based user authentication success
           const payload = { id: user.id, email: user.email, name: user.name, role: user.role };
@@ -459,13 +453,7 @@ app.post('/api/auth/signin', async (req, res) => {
           // Role mismatch - return generic error for privacy
           return res.status(401).json({ error: 'Invalid email or password' });
         }
-        // If judge role and eventId provided, validate authorizedJudges
-        if (role === 'judge' && eventId) {
-          const ev = await findEventByIdOrCode(String(eventId));
-          if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
-          const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
-          if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
-        }
+  // No event-code based judge validation; rely on profile.role checks only
 
         // For Supabase-backed auth, return success with user profile
         // The client should have already authenticated with Supabase
@@ -498,13 +486,7 @@ app.post('/api/auth/signin', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // If judge role and eventId provided, validate authorized judges for that event
-    if (role === 'judge' && eventId) {
-      const ev = await findEventByIdOrCode(String(eventId));
-      if (!ev) return res.status(401).json({ error: 'Invalid email or password' });
-      const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(e => e.toLowerCase()) : [];
-      if (!allowed.includes(email.toLowerCase())) return res.status(401).json({ error: 'Invalid email or password' });
-    }
+  // No event-code based judge validation on fallback auth
 
     const payload = { id: user.id, email: user.email, name: user.name, role: user.role };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
