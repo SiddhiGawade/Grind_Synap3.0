@@ -11,12 +11,33 @@ const initialForm = (prefill = {}) => ({
   aadhar: '',
   organization: '',
   designation: '',
+  eventType: 'event',
   eventTitle: '',
   eventDescription: '',
   startDate: '',
+  startTime: '',
   endDate: '',
+  endTime: '',
   numberOfMentors: 0,
-  selectedJudges: []
+  selectedJudges: [],
+  // Hackathon specific fields
+  hackathonMode: 'offline',
+  venue: '',
+  registrationDeadline: '',
+  eligibility: 'open',
+  minTeamSize: '',
+  maxTeamSize: '',
+  maxParticipants: '',
+  themes: '',
+  tracks: [],
+  submissionGuidelines: '',
+  evaluationCriteria: '',
+  prizeDetails: '',
+  participationCertificates: true,
+  // Event specific fields
+  eventCategory: '',
+  eventMode: 'offline',
+  registrationFee: '',
 });
 
 const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
@@ -273,6 +294,17 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
               <h3 className="text-lg font-bold">Event details</h3>
               <div className="grid grid-cols-1 gap-3">
                 <div>
+                  <label className="block text-sm font-medium">Event Type</label>
+                  <select 
+                    value={form.eventType} 
+                    onChange={(e) => update({ eventType: e.target.value })}
+                    className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                  >
+                    <option value="event">Event</option>
+                    <option value="hackathon">Hackathon</option>
+                  </select>
+                </div>
+                <div>
                   <label className="block text-sm font-medium">Title (required)</label>
                   <input value={form.eventTitle} onChange={(e) => update({ eventTitle: e.target.value })} className="mt-1 w-full border p-3 rounded bg-[#fafafa]" maxLength={100} />
                   <div className="text-xs text-[#151616]/60 mt-1">{(form.eventTitle || '').length}/100</div>
@@ -291,6 +323,319 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                     <input type="date" value={form.endDate} onChange={(e) => update({ endDate: e.target.value })} className="mt-1 w-full border p-3 rounded bg-[#fafafa]" />
                   </div>
                 </div>
+
+                {form.eventType === 'hackathon' ? (
+                  <div className="space-y-6 border-t pt-4">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-md font-semibold">🚀 Hackathon Details</h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium">Mode</label>
+                        <select
+                          value={form.hackathonMode}
+                          onChange={(e) => update({ hackathonMode: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        >
+                          <option value="offline">Offline</option>
+                          <option value="online">Online</option>
+                          <option value="hybrid">Hybrid</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Eligibility</label>
+                        <select
+                          value={form.eligibility}
+                          onChange={(e) => update({ eligibility: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        >
+                          <option value="open">Open for All</option>
+                          <option value="students">Students Only</option>
+                          <option value="professionals">Professionals Only</option>
+                          <option value="college">College Students</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium">
+                          {form.hackathonMode !== 'online' ? 'Venue / Location' : 'Platform Link'}
+                        </label>
+                        <input
+                          type="text"
+                          value={form.venue}
+                          onChange={(e) => update({ venue: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          placeholder={form.hackathonMode !== 'online' ? 'Enter venue address' : 'Enter platform/meeting link'}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Start Time</label>
+                        <input
+                          type="time"
+                          value={form.startTime}
+                          onChange={(e) => update({ startTime: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">End Time</label>
+                        <input
+                          type="time"
+                          value={form.endTime}
+                          onChange={(e) => update({ endTime: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Registration Deadline</label>
+                        <input
+                          type="date"
+                          value={form.registrationDeadline}
+                          onChange={(e) => update({ registrationDeadline: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Expected Participants</label>
+                        <input
+                          type="number"
+                          value={form.maxParticipants}
+                          onChange={(e) => update({ maxParticipants: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          placeholder="Maximum number of participants"
+                          min="1"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Minimum Team Size</label>
+                        <input
+                          type="number"
+                          value={form.minTeamSize}
+                          onChange={(e) => update({ minTeamSize: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          placeholder="Minimum members per team"
+                          min="1"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Maximum Team Size</label>
+                        <input
+                          type="number"
+                          value={form.maxTeamSize}
+                          onChange={(e) => update({ maxTeamSize: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          placeholder="Maximum members per team"
+                          min="1"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium">Themes / Problem Statements</label>
+                        <textarea
+                          value={form.themes}
+                          onChange={(e) => update({ themes: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          rows={3}
+                          placeholder="Enter the themes or problem statements for the hackathon"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium">Tracks / Categories</label>
+                        <div className="mt-1 space-y-2">
+                          {(form.tracks || []).map((track, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={track}
+                                onChange={(e) => {
+                                  const newTracks = [...(form.tracks || [])];
+                                  newTracks[index] = e.target.value;
+                                  update({ tracks: newTracks });
+                                }}
+                                className="flex-1 border p-3 rounded bg-[#fafafa]"
+                                placeholder="Enter track name"
+                              />
+                              <button
+                                onClick={() => {
+                                  const newTracks = form.tracks.filter((_, i) => i !== index);
+                                  update({ tracks: newTracks });
+                                }}
+                                className="p-2 text-red-500 hover:bg-red-50 rounded"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => update({ tracks: [...(form.tracks || []), ''] })}
+                            className="px-4 py-2 text-sm border border-[#D6F32F] rounded hover:bg-[#D6F32F]/10"
+                          >
+                            + Add Track
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium">Submission Guidelines</label>
+                        <textarea
+                          value={form.submissionGuidelines}
+                          onChange={(e) => update({ submissionGuidelines: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          rows={3}
+                          placeholder="Specify format, deadline, and submission platform details"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium">Evaluation Criteria</label>
+                        <textarea
+                          value={form.evaluationCriteria}
+                          onChange={(e) => update({ evaluationCriteria: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          rows={3}
+                          placeholder="Describe how projects will be evaluated"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium">Prize Details</label>
+                        <textarea
+                          value={form.prizeDetails}
+                          onChange={(e) => update({ prizeDetails: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          rows={3}
+                          placeholder="Specify prizes, cash rewards, goodies, internship opportunities, etc."
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={form.participationCertificates}
+                            onChange={(e) => update({ participationCertificates: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-300"
+                          />
+                          <span className="text-sm font-medium">Provide Participation Certificates</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <h4 className="text-md font-semibold">🎉 Event Details</h4>
+                      <span className="text-xs text-[#151616]/60">Conference, Workshop, Meetup, etc.</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium">Event Category</label>
+                        <select
+                          value={form.eventCategory}
+                          onChange={(e) => update({ eventCategory: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        >
+                          <option value="">Select category</option>
+                          <option value="conference">Conference</option>
+                          <option value="workshop">Workshop</option>
+                          <option value="seminar">Seminar</option>
+                          <option value="meetup">Meetup</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Mode</label>
+                        <select
+                          value={form.eventMode}
+                          onChange={(e) => update({ eventMode: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        >
+                          <option value="offline">Offline</option>
+                          <option value="online">Online</option>
+                          <option value="hybrid">Hybrid</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium">
+                          {form.eventMode !== 'online' ? 'Venue / Location' : 'Platform Link'}
+                        </label>
+                        <input
+                          type="text"
+                          value={form.venue}
+                          onChange={(e) => update({ venue: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          placeholder={form.eventMode !== 'online' ? 'Enter venue address' : 'Enter platform/meeting link'}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Start Time</label>
+                        <input
+                          type="time"
+                          value={form.startTime}
+                          onChange={(e) => update({ startTime: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">End Time</label>
+                        <input
+                          type="time"
+                          value={form.endTime}
+                          onChange={(e) => update({ endTime: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Registration Deadline</label>
+                        <input
+                          type="date"
+                          value={form.registrationDeadline}
+                          onChange={(e) => update({ registrationDeadline: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Registration Fee (₹)</label>
+                        <input
+                          type="number"
+                          value={form.registrationFee}
+                          onChange={(e) => update({ registrationFee: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          placeholder="Leave empty if free"
+                          min="0"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium">Expected Participants</label>
+                        <input
+                          type="number"
+                          value={form.maxParticipants}
+                          onChange={(e) => update({ maxParticipants: e.target.value })}
+                          className="mt-1 w-full border p-3 rounded bg-[#fafafa]"
+                          placeholder="Maximum number of participants"
+                          min="1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -357,10 +702,48 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                 <p><strong>Host:</strong> {form.name} • {form.email}</p>
                 <p><strong>Organization:</strong> {form.organization} • {form.designation}</p>
                 <hr />
+                <p><strong>Type:</strong> {form.eventType === 'hackathon' ? 'Hackathon' : 'Event'}</p>
                 <p><strong>Title:</strong> {form.eventTitle}</p>
                 <p><strong>Description:</strong> {form.eventDescription}</p>
                 <p><strong>Dates:</strong> {form.startDate || '—'} to {form.endDate || '—'}</p>
                 <p><strong>Mentors:</strong> {form.numberOfMentors || 0}</p>
+                
+                {form.eventType === 'hackathon' ? (
+                  <>
+                    <p><strong>Mode:</strong> {form.hackathonMode ? form.hackathonMode.charAt(0).toUpperCase() + form.hackathonMode.slice(1) : '—'}</p>
+                    <p><strong>Eligibility:</strong> {form.eligibility ? form.eligibility.charAt(0).toUpperCase() + form.eligibility.slice(1) : '—'}</p>
+                    <p><strong>Location/Venue:</strong> {form.venue || '—'}</p>
+                    <p><strong>Timing:</strong> {form.startTime || '—'} to {form.endTime || '—'}</p>
+                    <p><strong>Registration Deadline:</strong> {form.registrationDeadline || '—'}</p>
+                    <p><strong>Team Size:</strong> {form.minTeamSize || '—'} to {form.maxTeamSize || '—'} members</p>
+                    <p><strong>Expected Participants:</strong> {form.maxParticipants || '—'}</p>
+                    <p><strong>Themes/Problem Statements:</strong> {form.themes || '—'}</p>
+                    {form.tracks && form.tracks.length > 0 && (
+                      <div>
+                        <p><strong>Tracks/Categories:</strong></p>
+                        <ul className="ml-5 list-disc">
+                          {form.tracks.map((track, index) => (
+                            <li key={index}>{track}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <p><strong>Submission Guidelines:</strong> {form.submissionGuidelines || '—'}</p>
+                    <p><strong>Evaluation Criteria:</strong> {form.evaluationCriteria || '—'}</p>
+                    <p><strong>Prize Details:</strong> {form.prizeDetails || '—'}</p>
+                    <p><strong>Participation Certificates:</strong> {form.participationCertificates ? 'Yes' : 'No'}</p>
+                  </>
+                ) : (
+                  <>
+                    <p><strong>Event Category:</strong> {form.eventCategory ? form.eventCategory.charAt(0).toUpperCase() + form.eventCategory.slice(1) : '—'}</p>
+                    <p><strong>Mode:</strong> {form.eventMode ? form.eventMode.charAt(0).toUpperCase() + form.eventMode.slice(1) : '—'}</p>
+                    <p><strong>Location/Venue:</strong> {form.venue || '—'}</p>
+                    <p><strong>Timing:</strong> {form.startTime || '—'} to {form.endTime || '—'}</p>
+                    <p><strong>Registration Deadline:</strong> {form.registrationDeadline || '—'}</p>
+                    <p><strong>Registration Fee:</strong> {form.registrationFee ? `₹${form.registrationFee}` : 'Free'}</p>
+                    <p><strong>Expected Participants:</strong> {form.maxParticipants || '—'}</p>
+                  </>
+                )}
                 {form.selectedJudges?.length > 0 && (
                   <div>
                     <p><strong>Authorized judges:</strong></p>
