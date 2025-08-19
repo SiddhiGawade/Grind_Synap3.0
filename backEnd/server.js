@@ -9,6 +9,7 @@ require('dotenv').config();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
 const DATA_FILE = path.join(__dirname, 'users.json');
+const EVENTS_FILE = path.join(__dirname, 'events.json');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -16,7 +17,90 @@ const app = express();
 // Allow CORS from the frontend base configured in the backend .env (fallback to localhost:5173)
 const FRONTEND_BASE = process.env.FRONTEND_BASE || 'http://localhost:5173';
 app.use(cors({ origin: FRONTEND_BASE }));
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+
+// Serve uploaded files
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(UPLOADS_DIR));
+
+// Multer setup for image uploads
+let multer;
+try {
+  multer = require('multer');
+} catch (e) {
+  multer = null;
+}
+
+if (multer) {
+  const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, UPLOADS_DIR);
+    },
+    filename: function (req, file, cb) {
+      const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const safe = file.originalname.replace(/[^a-zA-Z0-9.\-\_]/g, '_');
+      cb(null, `${unique}-${safe}`);
+    }
+  });
+  const upload = multer({ storage });
+
+  // Image upload endpoint
+  app.post('/api/upload', upload.single('file'), (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+      const url = `/uploads/${req.file.filename}`;
+      return res.json({ url, filename: req.file.filename });
+    } catch (err) {
+      console.error('Upload error', err);
+      return res.status(500).json({ error: 'Upload failed' });
+    }
+  });
+} else {
+  console.warn('Multer not installed - upload endpoint disabled');
+}
+
+// Fallback upload endpoint (accepts base64) so front-end can work even if multer isn't installed
+app.post('/api/upload-base64', async (req, res) => {
+  try {
+    const { filename, data } = req.body || {};
+    if (!filename || !data) return res.status(400).json({ error: 'Missing filename or data' });
+    // ensure uploads dir exists
+    try { await fs.mkdir(UPLOADS_DIR, { recursive: true }); } catch (e) {}
+    const safe = filename.replace(/[^a-zA-Z0-9.\-\_]/g, '_');
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9) + '-' + safe;
+    const dest = path.join(UPLOADS_DIR, unique);
+    // data is expected to be data URL or base64 string
+    const base64 = data.includes('base64,') ? data.split('base64,')[1] : data;
+    const buffer = Buffer.from(base64, 'base64');
+    await fs.writeFile(dest, buffer);
+    const url = `/uploads/${unique}`;
+    return res.json({ url, filename: unique });
+  } catch (err) {
+    console.error('base64 upload failed', err);
+    return res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// Also expose /api/upload as a fallback when multer isn't available so front-end doesn't get 404
+app.post('/api/upload', async (req, res) => {
+  try {
+    if (multer) return res.status(400).json({ error: 'Multer upload should handle this request' });
+    const { filename, data } = req.body || {};
+    if (!filename || !data) return res.status(400).json({ error: 'Missing filename or data' });
+    try { await fs.mkdir(UPLOADS_DIR, { recursive: true }); } catch (e) {}
+    const safe = filename.replace(/[^a-zA-Z0-9.\-\_]/g, '_');
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9) + '-' + safe;
+    const dest = path.join(UPLOADS_DIR, unique);
+    const base64 = data.includes('base64,') ? data.split('base64,')[1] : data;
+    const buffer = Buffer.from(base64, 'base64');
+    await fs.writeFile(dest, buffer);
+    const url = `/uploads/${unique}`;
+    return res.json({ url, filename: unique });
+  } catch (err) {
+    console.error('fallback upload failed', err);
+    return res.status(500).json({ error: 'Upload failed' });
+  }
+});
 
 // Initialize Supabase admin client if service key is provided
 let supabaseAdmin = null;
@@ -46,6 +130,23 @@ async function readUsers() {
 
 async function writeUsers(users) {
   await fs.writeFile(DATA_FILE, JSON.stringify(users, null, 2));
+}
+
+async function readEvents() {
+  try {
+    const raw = await fs.readFile(EVENTS_FILE, 'utf8');
+    return JSON.parse(raw || '[]');
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      await fs.writeFile(EVENTS_FILE, '[]');
+      return [];
+    }
+    throw e;
+  }
+}
+
+async function writeEvents(events) {
+  await fs.writeFile(EVENTS_FILE, JSON.stringify(events, null, 2));
 }
 
 app.get('/api/health', (req, res) => {
@@ -303,6 +404,42 @@ app.post('/api/auth/sync-profile', async (req, res) => {
 
   } catch (err) {
     console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Simple events creation endpoint (file-backed fallback). If Supabase is configured,
+// you can extend this to insert into a Supabase table instead.
+app.post('/api/events', async (req, res) => {
+  try {
+    const data = req.body || {};
+    // Basic validation
+    if (!data.eventTitle || !data.name || !data.email) {
+      return res.status(400).json({ error: 'Missing required fields: eventTitle, name, email' });
+    }
+
+    const events = await readEvents();
+    const newEvent = {
+      id: Date.now().toString(),
+      ...data,
+      createdAt: new Date().toISOString()
+    };
+    events.push(newEvent);
+    await writeEvents(events);
+
+    return res.status(201).json({ message: 'Event created', event: newEvent });
+  } catch (err) {
+    console.error('Failed to create event', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/events', async (req, res) => {
+  try {
+    const events = await readEvents();
+    return res.json(events);
+  } catch (err) {
+    console.error('Failed to read events', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });
