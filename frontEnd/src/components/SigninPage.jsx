@@ -16,10 +16,14 @@ const SigninPage = ({ onNavigate }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    console.log('SigninPage: Starting sign-in process');
     const res = await signin({ email: formData.email, password: formData.password, role: formData.role, eventId: formData.eventId });
     if (res.ok) {
-      onNavigate('dashboard');
+      console.log('SigninPage: Sign-in successful, user should be set in context');
+      // Don't navigate manually - let the App component handle this automatically
+      // when user state changes
     } else {
+      console.log('SigninPage: Sign-in failed:', res.error);
       setError(res.error || 'Signin failed');
     }
   };

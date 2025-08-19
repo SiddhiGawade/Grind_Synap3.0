@@ -84,6 +84,23 @@ const ParticipantDashboard = () => {
     );
   };
 
+  // Helper to read event fields from multiple possible shapes (camelCase, snake_case, or _raw)
+  const getEventField = (ev, ...keys) => {
+    if (!ev) return undefined;
+    for (const key of keys) {
+      if (key in ev && ev[key] !== undefined && ev[key] !== null) return ev[key];
+      // try snake_case
+      const snake = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      if (snake in ev && ev[snake] !== undefined && ev[snake] !== null) return ev[snake];
+      // try raw
+      if (ev._raw) {
+        if (key in ev._raw && ev._raw[key] !== undefined && ev._raw[key] !== null) return ev._raw[key];
+        if (snake in ev._raw && ev._raw[snake] !== undefined && ev._raw[snake] !== null) return ev._raw[snake];
+      }
+    }
+    return undefined;
+  };
+
   useEffect(() => {
     let mounted = true;
     const loadEvents = async () => {
@@ -257,16 +274,16 @@ const ParticipantDashboard = () => {
                     <div>
                       <div className="flex items-center gap-3 mb-1">
                         <h2 className="text-2xl font-bold text-primary">
-                          {selectedEvent.eventTitle || 'Event Details'}
-                        </h2>
-                        <span className="px-3 py-1 text-sm rounded-full bg-accent text-secondary">
-                          {formatEventType(selectedEvent.eventType)}
-                        </span>
+                            {getEventField(selectedEvent, 'eventTitle', 'title', 'name') || 'Event Details'}
+                          </h2>
+                          <span className="px-3 py-1 text-sm rounded-full bg-accent text-secondary">
+                            {formatEventType(getEventField(selectedEvent, 'eventType', 'event_type'))}
+                          </span>
                       </div>
-                      {selectedEvent.organization && (
+                      {getEventField(selectedEvent, 'organization') && (
                         <p className="text-primary/80 flex items-center gap-1">
                           <UsersIcon className="w-4 h-4" />
-                          {selectedEvent.organization}
+                          {getEventField(selectedEvent, 'organization')}
                         </p>
                       )}
                     </div>
@@ -280,10 +297,10 @@ const ParticipantDashboard = () => {
 
                   <div className="space-y-6">
                     {/* Event Description */}
-                    {selectedEvent.eventDescription && (
+                    {getEventField(selectedEvent, 'eventDescription', 'event_description') && (
                       <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
                         <h3 className="text-lg font-semibold text-primary mb-2">About This Event</h3>
-                        <p className="text-primary whitespace-pre-line">{selectedEvent.eventDescription}</p>
+                        <p className="text-primary whitespace-pre-line">{getEventField(selectedEvent, 'eventDescription', 'event_description')}</p>
                       </div>
                     )}
 
@@ -299,19 +316,19 @@ const ParticipantDashboard = () => {
                           <div>
                             <p className="text-sm font-medium text-primary/70">Starts</p>
                             <p className="text-primary">
-                              {formatDate(selectedEvent.startDate || selectedEvent.startTime)}
+                              {formatDate(getEventField(selectedEvent, 'startDate', 'start_date', 'startTime', 'start_time'))}
                             </p>
                           </div>
                           <div>
                             <p className="text-sm font-medium text-primary/70">Ends</p>
                             <p className="text-primary">
-                              {formatDate(selectedEvent.endDate || selectedEvent.endTime)}
+                              {formatDate(getEventField(selectedEvent, 'endDate', 'end_date', 'endTime', 'end_time'))}
                             </p>
                           </div>
-                          {selectedEvent.registrationDeadline && (
+                          {getEventField(selectedEvent, 'registrationDeadline', 'registration_deadline') && (
                             <div className="pt-2 mt-2 border-t border-themed/30">
                               <p className="text-sm font-medium text-primary/70">Registration Deadline</p>
-                              <p className="text-primary">{formatDate(selectedEvent.registrationDeadline)}</p>
+                              <p className="text-primary">{formatDate(getEventField(selectedEvent, 'registrationDeadline', 'registration_deadline'))}</p>
                             </div>
                           )}
                         </div>
@@ -327,10 +344,10 @@ const ParticipantDashboard = () => {
                           <div>
                             <p className="text-sm font-medium text-primary/70">Mode</p>
                             <p className="text-primary capitalize">
-                              {selectedEvent.eventMode === 'online' ? 'Online' : 
-                               selectedEvent.eventMode === 'offline' ? 'In-Person' : 
-                               selectedEvent.hackathonMode === 'online' ? 'Online' :
-                               selectedEvent.hackathonMode === 'offline' ? 'In-Person' :
+                              {getEventField(selectedEvent, 'eventMode', 'event_mode') === 'online' ? 'Online' : 
+                               getEventField(selectedEvent, 'eventMode', 'event_mode') === 'offline' ? 'In-Person' : 
+                               getEventField(selectedEvent, 'hackathonMode', 'hackathon_mode') === 'online' ? 'Online' :
+                               getEventField(selectedEvent, 'hackathonMode', 'hackathon_mode') === 'offline' ? 'In-Person' :
                                'To be announced'}
                             </p>
                           </div>
@@ -341,7 +358,7 @@ const ParticipantDashboard = () => {
                                 : 'Venue'}
                             </p>
                             <p className="text-primary break-words">
-                              {selectedEvent.venue || selectedEvent.meetingLink || 'To be announced'}
+                              {getEventField(selectedEvent, 'venue') || getEventField(selectedEvent, 'meetingLink', 'meeting_link') || 'To be announced'}
                             </p>
                           </div>
                         </div>
@@ -356,32 +373,32 @@ const ParticipantDashboard = () => {
                         <div className="space-y-3">
                           <div>
                             <p className="text-sm font-medium text-primary/70">Team Size</p>
-                            <p className="text-primary">
-                              {selectedEvent.minTeamSize && selectedEvent.maxTeamSize 
-                                ? `${selectedEvent.minTeamSize} - ${selectedEvent.maxTeamSize} members`
-                                : selectedEvent.numberOfParticipants 
-                                  ? `Up to ${selectedEvent.numberOfParticipants} participants`
+                              <p className="text-primary">
+                              {getEventField(selectedEvent, 'minTeamSize') && getEventField(selectedEvent, 'maxTeamSize') 
+                                ? `${getEventField(selectedEvent, 'minTeamSize')} - ${getEventField(selectedEvent, 'maxTeamSize')} members`
+                                : getEventField(selectedEvent, 'numberOfParticipants') 
+                                  ? `Up to ${getEventField(selectedEvent, 'numberOfParticipants')} participants`
                                   : 'Individual or Team'}
                             </p>
                           </div>
-                          {selectedEvent.maxParticipants && (
+                          {getEventField(selectedEvent, 'maxParticipants') && (
                             <div>
                               <p className="text-sm font-medium text-primary/70">Max Participants</p>
-                              <p className="text-primary">{selectedEvent.maxParticipants}</p>
+                              <p className="text-primary">{getEventField(selectedEvent, 'maxParticipants')}</p>
                             </div>
                           )}
-                          {selectedEvent.eligibility && (
+                          {getEventField(selectedEvent, 'eligibility') && (
                             <div>
                               <p className="text-sm font-medium text-primary/70">Eligibility</p>
                               <p className="text-primary capitalize">
-                                {selectedEvent.eligibility === 'open' ? 'Open to all' : selectedEvent.eligibility}
+                                {getEventField(selectedEvent, 'eligibility') === 'open' ? 'Open to all' : getEventField(selectedEvent, 'eligibility')}
                               </p>
                             </div>
                           )}
-                          {selectedEvent.registrationFee && (
+                          {getEventField(selectedEvent, 'registrationFee', 'registration_fee') && (
                             <div>
                               <p className="text-sm font-medium text-primary/70">Registration Fee</p>
-                              <p className="text-primary">₹{selectedEvent.registrationFee}</p>
+                              <p className="text-primary">₹{getEventField(selectedEvent, 'registrationFee', 'registration_fee')}</p>
                             </div>
                           )}
                         </div>
@@ -394,22 +411,22 @@ const ParticipantDashboard = () => {
                           Prizes & Certificates
                         </h3>
                         <div className="space-y-3">
-                          {selectedEvent.prizeDetails ? (
+                          {getEventField(selectedEvent, 'prizeDetails') ? (
                             <div>
                               <p className="text-sm font-medium text-primary/70">Prizes</p>
-                              <p className="text-primary whitespace-pre-line">{selectedEvent.prizeDetails}</p>
+                              <p className="text-primary whitespace-pre-line">{getEventField(selectedEvent, 'prizeDetails')}</p>
                             </div>
                           ) : (
                             <p className="text-primary/70">Prize details coming soon</p>
                           )}
                           
                           <div className="flex items-center gap-2 text-primary">
-                            {selectedEvent.participationCertificates ? (
+              {getEventField(selectedEvent, 'participationCertificates', 'participation_certificates') ? (
                               <>
                                 <svg className="w-5 h-5 text-accent flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <span>Participation certificates will be provided</span>
+                <span>Participation certificates will be provided</span>
                               </>
                             ) : (
                               <span className="text-primary/70">No participation certificates</span>

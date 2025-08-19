@@ -162,13 +162,33 @@ function mapEventRow(row) {
     eventTitle: row.event_title || row.eventTitle || null,
     eventDescription: row.event_description || row.eventDescription || null,
     startDate: row.start_date || row.startDate || null,
+    startTime: row.start_time || row.startTime || null,
     endDate: row.end_date || row.endDate || null,
+    endTime: row.end_time || row.endTime || null,
     numberOfMentors: row.number_of_mentors != null ? row.number_of_mentors : (row.numberOfMentors || 0),
     authorizedJudges: Array.isArray(row.authorized_judges) ? row.authorized_judges : (row.authorizedJudges || []),
     judgeEmailsText: row.judge_emails_text || row.judgeEmailsText || undefined,
+    // Hackathon specific fields
+    hackathonMode: row.hackathon_mode || row.hackathonMode || null,
+    venue: row.venue || null,
+    registrationDeadline: row.registration_deadline || row.registrationDeadline || null,
+    eligibility: row.eligibility || null,
+    minTeamSize: row.min_team_size || row.minTeamSize || null,
+    maxTeamSize: row.max_team_size || row.maxTeamSize || null,
+    maxParticipants: row.max_participants || row.maxParticipants || null,
+    themes: row.themes || null,
+    tracks: Array.isArray(row.tracks) ? row.tracks : (row.tracks || []),
+    submissionGuidelines: row.submission_guidelines || row.submissionGuidelines || null,
+    evaluationCriteria: row.evaluation_criteria || row.evaluationCriteria || null,
+    prizeDetails: row.prize_details || row.prizeDetails || null,
+    participationCertificates: row.participation_certificates != null ? row.participation_certificates : (row.participationCertificates || false),
+    // Event specific fields
+    eventCategory: row.event_category || row.eventCategory || null,
+    eventMode: row.event_mode || row.eventMode || null,
+    registrationFee: row.registration_fee || row.registrationFee || null,
     announcements: Array.isArray(row.announcements) ? row.announcements : (row.announcements || []),
     eventCode: row.event_code || row.eventCode || null,
-  eventType: row.event_type || row.eventType || null,
+    eventType: row.event_type || row.eventType || null,
     createdAt: row.created_at || row.createdAt || null,
     updatedAt: row.updated_at || row.updatedAt || null,
     // passthrough any other fields that might exist
@@ -501,15 +521,60 @@ app.get('/api/auth/me', async (req, res) => {
     const parts = auth.split(' ');
     if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Invalid authorization' });
     const token = parts[1];
-    let payload;
+    
+    // First, try to verify as our own JWT token
     try {
-      payload = jwt.verify(token, JWT_SECRET);
-    } catch (e) {
-      return res.status(401).json({ error: 'Invalid token' });
+      const payload = jwt.verify(token, JWT_SECRET);
+      // Return user info from our JWT token (no sensitive data)
+      return res.json({ user: { id: payload.id, name: payload.name, email: payload.email, role: payload.role } });
+    } catch (jwtError) {
+      // JWT verification failed, try Supabase token verification
     }
 
-    // Return user info from token (no sensitive data)
-    return res.json({ user: { id: payload.id, name: payload.name, email: payload.email, role: payload.role } });
+    // If Supabase is configured, try to verify as Supabase access token
+    if (supabaseAdmin) {
+      try {
+        const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+        if (error || !user) {
+          return res.status(401).json({ error: 'Invalid token' });
+        }
+        
+        // Get user profile from Supabase profiles table
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (profileError) {
+          // If no profile exists, use user metadata
+          const meta = user.user_metadata || {};
+          return res.json({ 
+            user: { 
+              id: user.id, 
+              name: meta.name || user.email?.split('@')[0] || '', 
+              email: user.email, 
+              role: meta.role || 'participant' 
+            } 
+          });
+        }
+        
+        // Return profile data
+        return res.json({ 
+          user: { 
+            id: profile.id, 
+            name: profile.name, 
+            email: profile.email, 
+            role: profile.role 
+          } 
+        });
+      } catch (supabaseError) {
+        console.error('Supabase token verification failed:', supabaseError);
+      }
+    }
+    
+    // Neither JWT nor Supabase token worked
+    return res.status(401).json({ error: 'Invalid token' });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });
@@ -655,7 +720,7 @@ app.post('/api/events', async (req, res) => {
       // IMPORTANT: do NOT send a non-UUID `id` to Supabase if your table's id is uuid
       // let the DB generate the UUID by omitting id from the insert payload
       const insertPayload = {
-  event_type: eventPayload.eventType,
+        event_type: eventPayload.eventType,
         name: eventPayload.name,
         email: eventPayload.email,
         aadhar: eventPayload.aadhar,
@@ -664,9 +729,29 @@ app.post('/api/events', async (req, res) => {
         event_title: eventPayload.eventTitle,
         event_description: eventPayload.eventDescription,
         start_date: eventPayload.startDate,
+        start_time: eventPayload.startTime,
         end_date: eventPayload.endDate,
+        end_time: eventPayload.endTime,
         number_of_mentors: eventPayload.numberOfMentors,
         authorized_judges: eventPayload.authorizedJudges,
+        // Hackathon specific fields
+        hackathon_mode: eventPayload.hackathonMode,
+        venue: eventPayload.venue,
+        registration_deadline: eventPayload.registrationDeadline,
+        eligibility: eventPayload.eligibility,
+        min_team_size: eventPayload.minTeamSize,
+        max_team_size: eventPayload.maxTeamSize,
+        max_participants: eventPayload.maxParticipants,
+        themes: eventPayload.themes,
+        tracks: eventPayload.tracks,
+        submission_guidelines: eventPayload.submissionGuidelines,
+        evaluation_criteria: eventPayload.evaluationCriteria,
+        prize_details: eventPayload.prizeDetails,
+        participation_certificates: eventPayload.participationCertificates,
+        // Event specific fields
+        event_category: eventPayload.eventCategory,
+        event_mode: eventPayload.eventMode,
+        registration_fee: eventPayload.registrationFee,
         announcements: eventPayload.announcements,
         event_code: code,
         created_at: eventPayload.createdAt

@@ -10,11 +10,38 @@ import LandingPage from './components/LandingPage';
 // Main App Component
 const App = () => {
   const [currentPage, setCurrentPage] = useState('landing');
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   const handleNavigation = (page) => {
     setCurrentPage(page);
   };
+
+  // Automatically navigate to dashboard when user is authenticated
+  React.useEffect(() => {
+    if (user && currentPage !== 'dashboard') {
+      setCurrentPage('dashboard');
+    } else if (!user && (currentPage === 'dashboard')) {
+      setCurrentPage('landing');
+    }
+  }, [user, currentPage]);
+
+  // Show loading state while auth is being initialized
+  if (loading) {
+    return (
+      <div className="app">
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '100vh',
+          fontSize: '18px',
+          color: '#666'
+        }}>
+          Loading...
+        </div>
+      </div>
+    );
+  }
 
   const renderPage = () => {
     if (user && currentPage === 'dashboard') {
