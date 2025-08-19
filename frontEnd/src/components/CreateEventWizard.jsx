@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Confetti from 'react-confetti';
+import Confetti from "react-confetti";
 import { motion, AnimatePresence } from 'framer-motion';
 
 // 4-step wizard: Host -> Event -> Mentors -> Confirmation
@@ -71,7 +71,7 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
     const fetchJudges = async () => {
       setJudgesLoading(true);
       try {
-        const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+        const API_BASE = import.meta.env.VITE_API_BASE || 'https://your-production-api.com';
         const res = await fetch(`${API_BASE}/api/judges`);
         const data = await res.json();
         if (res.ok) {
@@ -147,7 +147,7 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       }
       // Remove selectedJudges from payload as backend expects authorizedJudges
       delete payload.selectedJudges;
-      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+      const API_BASE = import.meta.env.VITE_API_BASE || 'https://your-production-api.com';
       const url = isEdit ? `${API_BASE}/api/events/${event.id}` : `${API_BASE}/api/events`;
       const method = isEdit ? 'PUT' : 'POST';
       const res = await fetch(url, {
