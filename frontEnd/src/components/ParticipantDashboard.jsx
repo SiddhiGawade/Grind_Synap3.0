@@ -294,6 +294,89 @@ const ParticipantDashboard = () => {
             </motion.div>
           </div>
 
+          {/* Current Events */}
+          <motion.div
+            className="dashboard-card-white p-6 rounded-2xl border-2 border-themed mb-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.8 }}
+          >
+            <h3 className="text-lg font-bold text-primary mb-6">Current Events</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {eventsLoading ? (
+                <div className="col-span-3 text-primary opacity-70">Loading events...</div>
+              ) : events.length === 0 ? (
+                <div className="col-span-3 text-primary opacity-60">No active events yet.</div>
+              ) : (
+                events.map((ev) => {
+                  // Calculate event status based on dates
+                  const today = new Date();
+                  const startDate = new Date(ev.startDate);
+                  const endDate = new Date(ev.endDate);
+                  
+                  let eventStatus = 'Active';
+                  let statusColor = 'bg-green-200 text-green-800';
+                  let timeInfo = '';
+                  
+                  if (today < startDate) {
+                    eventStatus = 'Upcoming';
+                    statusColor = 'bg-blue-200 text-blue-800';
+                    const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
+                    timeInfo = `Starts in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
+                  } else if (today > endDate) {
+                    eventStatus = 'Ended';
+                    statusColor = 'bg-gray-200 text-gray-800';
+                    timeInfo = 'Event ended';
+                  } else {
+                    eventStatus = 'Active';
+                    statusColor = 'bg-green-200 text-green-800';
+                    const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                    timeInfo = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
+                  }
+                  
+                  return (
+                    <div
+                      key={ev.id || ev.eventCode || ev.event_code}
+                      className={`p-4 rounded-lg border-2 border-themed ${eventStatus === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}
+                    >
+                      <h4 className="font-bold text-primary">
+                        {ev.eventTitle || ev.title || ev.name || 'Untitled Event'}
+                      </h4>
+                      {ev.eventDescription && (
+                        <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>
+                      )}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
+                          {eventStatus}
+                        </span>
+                        <span className="text-xs text-primary opacity-60">{timeInfo}</span>
+                      </div>
+                      <div className="text-xs text-primary opacity-50 mb-3">
+                        {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-primary opacity-60">
+                          Code: {ev.eventCode || ev.event_code}
+                        </span>
+                        <button
+                          className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
+                          disabled={eventStatus === 'Ended'}
+                          onClick={() => {
+                            // For now, just log the event details
+                            console.log('Register for event:', ev);
+                            alert(`Registering for: ${ev.eventTitle}\nEvent Code: ${ev.eventCode}`);
+                          }}
+                        >
+                          {eventStatus === 'Ended' ? 'Ended' : 'Register'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </motion.div>
+
           {/* Quick Actions & Leaderboard */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Quick Actions */}
@@ -376,89 +459,6 @@ const ParticipantDashboard = () => {
                 ))
               ) : (
                 <p className="text-primary opacity-60">No certificates earned yet.</p>
-              )}
-            </div>
-          </motion.div>
-
-          {/* Current Events */}
-          <motion.div
-            className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.8 }}
-          >
-            <h3 className="text-lg font-bold text-primary mb-6">Current Events</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {eventsLoading ? (
-                <div className="col-span-3 text-primary opacity-70">Loading events...</div>
-              ) : events.length === 0 ? (
-                <div className="col-span-3 text-primary opacity-60">No active events yet.</div>
-              ) : (
-                events.map((ev) => {
-                  // Calculate event status based on dates
-                  const today = new Date();
-                  const startDate = new Date(ev.startDate);
-                  const endDate = new Date(ev.endDate);
-                  
-                  let eventStatus = 'Active';
-                  let statusColor = 'bg-green-200 text-green-800';
-                  let timeInfo = '';
-                  
-                  if (today < startDate) {
-                    eventStatus = 'Upcoming';
-                    statusColor = 'bg-blue-200 text-blue-800';
-                    const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
-                    timeInfo = `Starts in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
-                  } else if (today > endDate) {
-                    eventStatus = 'Ended';
-                    statusColor = 'bg-gray-200 text-gray-800';
-                    timeInfo = 'Event ended';
-                  } else {
-                    eventStatus = 'Active';
-                    statusColor = 'bg-green-200 text-green-800';
-                    const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-                    timeInfo = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
-                  }
-                  
-                  return (
-                    <div
-                      key={ev.id || ev.eventCode || ev.event_code}
-                      className={`p-4 rounded-lg border-2 border-themed ${eventStatus === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}
-                    >
-                      <h4 className="font-bold text-primary">
-                        {ev.eventTitle || ev.title || ev.name || 'Untitled Event'}
-                      </h4>
-                      {ev.eventDescription && (
-                        <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>
-                      )}
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
-                          {eventStatus}
-                        </span>
-                        <span className="text-xs text-primary opacity-60">{timeInfo}</span>
-                      </div>
-                      <div className="text-xs text-primary opacity-50 mb-3">
-                        {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-primary opacity-60">
-                          Code: {ev.eventCode || ev.event_code}
-                        </span>
-                        <button
-                          className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
-                          disabled={eventStatus === 'Ended'}
-                          onClick={() => {
-                            // For now, just log the event details
-                            console.log('Register for event:', ev);
-                            alert(`Registering for: ${ev.eventTitle}\nEvent Code: ${ev.eventCode}`);
-                          }}
-                        >
-                          {eventStatus === 'Ended' ? 'Ended' : 'Register'}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })
               )}
             </div>
           </motion.div>
