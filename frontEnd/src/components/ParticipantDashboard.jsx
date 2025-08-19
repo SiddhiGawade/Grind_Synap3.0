@@ -1,9 +1,85 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ParticipantDashboard = () => {
   const { user, logout } = useAuth();
+  const [isProfileFormOpen, setProfileFormOpen] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [participantDetails, setParticipantDetails] = useState({
+    name: user.name,
+    institute: '',
+    github: '',
+    linkedin: '',
+    email: '',
+    mobile: '',
+    tshirtSize: '',
+  });
+  const [errors, setErrors] = useState({});
+
+  const avatars = [
+    '/avatars/Avatar-1.jpg',
+    '/avatars/Avatar-2.jpg',
+    '/avatars/Avatar-3.png',
+  ];
+
+  const handleEditProfileClick = () => {
+    setProfileFormOpen(true);
+  };
+
+  const handleCloseProfileForm = () => {
+    setProfileFormOpen(false);
+  };
+
+  const handleAvatarSelect = (avatar) => {
+    setSelectedAvatar(avatar);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+
+    if (name === 'mobile') {
+      // Allow only numeric input and limit to 10 digits
+      if (!/^\d*$/.test(value) || value.length > 10) return;
+    }
+
+    setParticipantDetails((prevDetails) => ({
+      ...prevDetails,
+      [name]: value,
+    }));
+
+    // Clear errors for the field being updated
+    setErrors((prevErrors) => ({
+      ...prevErrors,
+      [name]: '',
+    }));
+  };
+
+  const handleSaveProfile = (e) => {
+    e.preventDefault();
+    const newErrors = {};
+
+    // Validate mobile number
+    if (participantDetails.mobile.length !== 10) {
+      newErrors.mobile = 'Mobile number must be exactly 10 digits.';
+    }
+
+    // Validate LinkedIn link
+    if (
+      participantDetails.linkedin &&
+      !participantDetails.linkedin.startsWith('https://www.linkedin.com')
+    ) {
+      newErrors.linkedin = 'LinkedIn link must start with "https://www.linkedin.com".';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    console.log('Saved Details:', participantDetails, 'Selected Avatar:', selectedAvatar);
+    setProfileFormOpen(false); // Close the form
+  };
 
   return (
     <div className="min-h-screen bg-[#FFFFF4]">
@@ -43,11 +119,20 @@ const ParticipantDashboard = () => {
             <p className="text-[#151616]/70">Ready to participate in amazing hackathons and events?</p>
           </div>
 
-          {/* Circle and Edit Button */}
-          <div className="absolute top-0 right-4 mt-2 w-16 h-16 bg-white rounded-full border-2 border-[#151616] shadow-[2px_2px_0px_0px_#151616]"></div>
+          {/* Circle and Avatar */}
+          <div className="absolute top-0 right-4 mt-2 w-16 h-16 bg-white rounded-full border-2 border-[#151616] shadow-[2px_2px_0px_0px_#151616] flex items-center justify-center">
+            {selectedAvatar ? (
+              <img src={selectedAvatar} alt="Selected Avatar" className="w-14 h-14 rounded-full" />
+            ) : (
+              <span className="text-[#151616] text-sm">No Avatar</span>
+            )}
+          </div>
 
-          <button className="absolute top-19 right-4 bg-white/500 px-4 py-1 rounded-full border-2 border-[#151616] shadow-[2px_2px_0px_0px_#151616] hover:bg-white/60 transition-colors text-sm font-bold text-black">
-          Edit Profile
+          <button
+            onClick={handleEditProfileClick}
+            className="absolute top-19 right-4 bg-white/500 px-4 py-1 rounded-full border-2 border-[#151616] shadow-[2px_2px_0px_0px_#151616] hover:bg-white/60 transition-colors text-sm font-bold text-black"
+          >
+            Edit Profile
           </button>
 
         </div>
@@ -149,6 +234,132 @@ const ParticipantDashboard = () => {
           </div>
         </div>
       </main>
+
+      {/* Profile Form Modal */}
+      {isProfileFormOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl">
+            <h2 className="text-xl font-bold text-[#151616] mb-4">Edit Participant Profile</h2>
+            <form onSubmit={handleSaveProfile}>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Avatar Selection */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-[#151616] mb-1">Select Avatar</label>
+                  <div className="grid grid-cols-6 gap-2">
+                    {avatars.map((avatar, index) => (
+                      <img
+                        key={index}
+                        src={avatar}
+                        alt={`Avatar ${index + 1}`}
+                        className={`w-12 h-12 rounded-full cursor-pointer border-2 ${
+                          selectedAvatar === avatar ? 'border-[#D6F32F]' : 'border-gray-300'
+                        }`}
+                        onClick={() => handleAvatarSelect(avatar)}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {/* Name */}
+                <div>
+                  <label className="block text-sm font-medium text-[#151616] mb-1">Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={participantDetails.name}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border-2 border-[#151616] rounded-lg"
+                  />
+                </div>
+                {/* Institute */}
+                <div>
+                  <label className="block text-sm font-medium text-[#151616] mb-1">Institute</label>
+                  <input
+                    type="text"
+                    name="institute"
+                    value={participantDetails.institute}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border-2 border-[#151616] rounded-lg"
+                  />
+                </div>
+                {/* GitHub Link */}
+                <div>
+                  <label className="block text-sm font-medium text-[#151616] mb-1">GitHub Link</label>
+                  <input
+                    type="url"
+                    name="github"
+                    value={participantDetails.github}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border-2 border-[#151616] rounded-lg"
+                  />
+                </div>
+                {/* LinkedIn Link */}
+                <div>
+                  <label className="block text-sm font-medium text-[#151616] mb-1">LinkedIn Link</label>
+                  <input
+                    type="url"
+                    name="linkedin"
+                    value={participantDetails.linkedin}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border-2 border-[#151616] rounded-lg"
+                    placeholder="https://www.linkedin.com/your-profile"
+                  />
+                  {errors.linkedin && (
+                    <p className="text-red-500 text-sm mt-1">{errors.linkedin}</p>
+                  )}
+                </div>
+                {/* Mobile Number */}
+                <div>
+                  <label className="block text-sm font-medium text-[#151616] mb-1">Mobile Number</label>
+                  <input
+                    type="tel"
+                    name="mobile"
+                    value={participantDetails.mobile}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border-2 border-[#151616] rounded-lg"
+                    placeholder="Enter 10-digit mobile number"
+                  />
+                  {errors.mobile && (
+                    <p className="text-red-500 text-sm mt-1">{errors.mobile}</p>
+                  )}
+                </div>
+                {/* T-shirt Size */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-[#151616] mb-1">T-shirt Size</label>
+                  <select
+                    name="tshirtSize"
+                    value={participantDetails.tshirtSize}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border-2 border-[#151616] rounded-lg"
+                  >
+                    <option value="">Select Size</option>
+                    <option value="S">Small</option>
+                    <option value="M">Medium</option>
+                    <option value="L">Large</option>
+                    <option value="XL">Extra Large</option>
+                    <option value="XXL">XXL</option>
+                  </select>
+                </div>
+              </div>
+              {/* Buttons */}
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={handleCloseProfileForm}
+                  className="px-4 py-2 bg-gray-200 rounded-lg border-2 border-[#151616] hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#D6F32F] rounded-lg border-2 border-[#151616] hover:bg-[#D6F32F]/80"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
