@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import Confetti from 'react-confetti';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // 4-step wizard: Host -> Event -> Mentors -> Confirmation
 const steps = ['Host details', 'Event details', 'Mentors', 'Confirmation'];
@@ -47,6 +49,22 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
   const [createdEvent, setCreatedEvent] = useState(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     // Fetch available judges when component mounts
@@ -86,6 +104,12 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       if (!/^\d{12}$/.test(aadharNumber)) return 'Aadhar number must be exactly 12 digits';
       if (/[^0-9]/.test(aadharNumber)) return 'Aadhar number must contain only numbers';
       if (['0', '1'].includes(aadharNumber[0])) return 'Aadhar number must start with a digit between 2-9';
+
+      // Organization validation
+      const organizationName = form.organization.trim();
+      if (organizationName && !/^[A-Za-z\s]+$/.test(organizationName)) {
+        return 'Organization name must contain only letters and spaces';
+      }
       return null;
     }
     if (step === 1) {
@@ -137,6 +161,9 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       setSuccess(data.message || 'Event created successfully');
       // keep created event in local state so we can show the generated eventCode
       setCreatedEvent(data.event || null);
+      // Show celebration animation
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 5000); // Hide confetti after 5 seconds
       // notify parent immediately so lists can refresh, but do not close the modal
       if (onCreated) {
         try { onCreated(data.event || null); } catch (e) {}
@@ -151,6 +178,27 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-6 overflow-auto">
+      {showCelebration && (
+        <>
+          <Confetti
+            width={windowSize.width}
+            height={windowSize.height}
+            recycle={false}
+            numberOfPieces={500}
+            colors={['#D6F32F', '#151616', '#4CAF50', '#FFC107']}
+          />
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0 }}
+            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
+          >
+            <div className="text-4xl font-bold text-white text-center p-8">
+              🎉 Hurray! Event Created! 🎉
+            </div>
+          </motion.div>
+        </>
+      )}
       <div className="w-full max-w-4xl bg-white rounded-2xl border-2 border-[#151616] shadow-[8px_8px_0px_0px_#151616]">
         <div className="p-6 border-b-2 border-[#efefef]">
           <div className="flex items-center justify-between">
@@ -201,7 +249,16 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Organization</label>
-                  <input value={form.organization} onChange={(e) => update({ organization: e.target.value })} className="mt-1 w-full border p-3 rounded bg-[#fafafa]" />
+                  <input 
+                    value={form.organization} 
+                    onChange={(e) => {
+                      // Only allow letters and spaces
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, '');
+                      update({ organization: value });
+                    }}
+                    placeholder="Enter organization name"
+                    className="mt-1 w-full border p-3 rounded bg-[#fafafa]" 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Designation</label>
@@ -347,7 +404,21 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
             </div>
             <div>
               {step < steps.length - 1 && <button onClick={goNext} className="px-4 py-2 bg-[#D6F32F] border rounded">Next</button>}
-              {step === steps.length - 1 && <button onClick={submit} disabled={loading} className="px-4 py-2 bg-[#4CAF50] text-white rounded">{loading ? 'Creating...' : 'Create Event'}</button>}
+              {step === steps.length - 1 && (
+                <motion.button
+                  onClick={submit}
+                  disabled={loading || createdEvent}
+                  className={`px-4 py-2 rounded transition-all ${
+                    createdEvent 
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-[#4CAF50] hover:bg-[#45a049] active:transform active:scale-95'
+                  } text-white`}
+                  whileHover={{ scale: createdEvent ? 1 : 1.02 }}
+                  whileTap={{ scale: createdEvent ? 1 : 0.98 }}
+                >
+                  {loading ? 'Creating...' : createdEvent ? 'Event Created!' : 'Create Event'}
+                </motion.button>
+              )}
             </div>
           </div>
         </div>
