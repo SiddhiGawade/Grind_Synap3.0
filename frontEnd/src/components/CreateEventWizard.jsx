@@ -19,6 +19,7 @@ const initialForm = (prefill = {}) => ({
   endDate: '',
   endTime: '',
   numberOfMentors: 0,
+  mentorEmails: [], // NEW: store mentor emails
   selectedJudges: [],
   // Hackathon specific fields
   hackathonMode: 'offline',
@@ -62,6 +63,7 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
         startDate: event.startDate || s.startDate,
         endDate: event.endDate || s.endDate,
         numberOfMentors: event.numberOfMentors || s.numberOfMentors,
+        mentorEmails: Array.isArray(event.mentorEmails) ? event.mentorEmails : [],
         selectedJudges: Array.isArray(event.authorizedJudges) ? event.authorizedJudges : []
       }));
     }
@@ -119,14 +121,12 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
     if (step === 0) {
       if (!form.name.trim()) return 'Name is required';
       if (!form.email.trim() || !/^[^@]+@[^@]+\.[^@]+$/.test(form.email)) return 'Valid email is required';
-      
       // Aadhar validation
       const aadharNumber = form.aadhar.trim();
       if (!aadharNumber) return 'Aadhar number is required';
       if (!/^\d{12}$/.test(aadharNumber)) return 'Aadhar number must be exactly 12 digits';
       if (/[^0-9]/.test(aadharNumber)) return 'Aadhar number must contain only numbers';
       if (['0', '1'].includes(aadharNumber[0])) return 'Aadhar number must start with a digit between 2-9';
-
       // Organization validation
       const organizationName = form.organization.trim();
       if (organizationName && !/^[A-Za-z\s]+$/.test(organizationName)) {
@@ -141,6 +141,17 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
     if (step === 2) {
       const n = Number(form.numberOfMentors || 0);
       if (Number.isNaN(n) || n < 0) return 'Number of mentors must be 0 or greater';
+      // Mentor email validation
+      if (n > 0) {
+        if (!form.mentorEmails || form.mentorEmails.length !== n) {
+          return `Please enter ${n} mentor email${n > 1 ? 's' : ''}`;
+        }
+        for (let i = 0; i < n; i++) {
+          const email = (form.mentorEmails[i] || '').trim();
+          if (!email) return `Mentor ${i + 1} email is required`;
+          if (!/^[^@]+@gmail\.com$/.test(email)) return `Mentor ${i + 1} must be a valid gmail.com address`;
+        }
+      }
       return null;
     }
     return null;
@@ -169,6 +180,10 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       }
       // Remove selectedJudges from payload as backend expects authorizedJudges
       delete payload.selectedJudges;
+      // If mentorEmails exists, send it as mentorEmails
+      if (Array.isArray(form.mentorEmails)) {
+        payload.mentorEmails = form.mentorEmails;
+      }
       const API_BASE = import.meta.env.VITE_API_BASE || 'https://your-production-api.com';
       const url = isEdit ? `${API_BASE}/api/events/${event.id}` : `${API_BASE}/api/events`;
       const method = isEdit ? 'PUT' : 'POST';
@@ -732,12 +747,47 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                     <input 
                       type="number" 
                       value={form.numberOfMentors || 0} 
-                      onChange={(e) => update({ numberOfMentors: Number(e.target.value) })} 
+                      onChange={(e) => {
+                        const n = Math.max(0, Number(e.target.value));
+                        // Adjust mentorEmails array length
+                        let mentorEmails = form.mentorEmails || [];
+                        if (n > mentorEmails.length) {
+                          mentorEmails = [...mentorEmails, ...Array(n - mentorEmails.length).fill('')];
+                        } else if (n < mentorEmails.length) {
+                          mentorEmails = mentorEmails.slice(0, n);
+                        }
+                        update({ numberOfMentors: n, mentorEmails });
+                      }} 
                       min={0} 
                       className="input-field mt-1 w-40 border-2 p-3 rounded" 
                     />
                   </div>
-                  
+                  {/* Mentor email inputs */}
+                  {form.numberOfMentors > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-primary mb-2">Mentor Emails (gmail.com only)</label>
+                      <div className="space-y-2">
+                        {Array.from({ length: form.numberOfMentors }).map((_, i) => (
+                          <input
+                            key={i}
+                            type="email"
+                            value={form.mentorEmails[i] || ''}
+                            onChange={e => {
+                              const mentorEmails = [...(form.mentorEmails || [])];
+                              mentorEmails[i] = e.target.value;
+                              update({ mentorEmails });
+                            }}
+                            className="input-field w-full border-2 p-3 rounded"
+                            placeholder={`Mentor ${i + 1} gmail.com address`}
+                            pattern="^[^@]+@gmail\.com$"
+                          />
+                        ))}
+                      </div>
+                      <div className="text-xs text-primary opacity-60 mt-1">
+                        Please enter valid gmail.com addresses for all mentors.
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-primary mb-2">Select Authorized Judges</label>
                     {judgesLoading ? (
