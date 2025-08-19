@@ -37,11 +37,19 @@ const ParticipantDashboard = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
-        <div className="mb-8">
+        <div className="mb-8 relative">
           <div className="bg-gradient-to-r from-[#D6F32F] to-[#D6F32F]/80 p-6 rounded-2xl border-2 border-[#151616] shadow-[4px_4px_0px_0px_#151616]">
             <h2 className="text-2xl font-black text-[#151616] mb-2">Welcome back, {user.name}! 👋</h2>
             <p className="text-[#151616]/70">Ready to participate in amazing hackathons and events?</p>
           </div>
+
+          {/* Circle and Edit Button */}
+          <div className="absolute top-0 right-4 mt-2 w-16 h-16 bg-white rounded-full border-2 border-[#151616] shadow-[2px_2px_0px_0px_#151616]"></div>
+
+          <button className="absolute top-19 right-4 bg-white/500 px-4 py-1 rounded-full border-2 border-[#151616] shadow-[2px_2px_0px_0px_#151616] hover:bg-white/60 transition-colors text-sm font-bold text-black">
+          Edit Profile
+          </button>
+
         </div>
 
         {/* Stats Cards */}
