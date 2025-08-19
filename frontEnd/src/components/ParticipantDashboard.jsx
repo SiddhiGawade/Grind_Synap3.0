@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Award, Share2, X, Clock, MapPin, Users as UsersIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { AnimatePresence, motion } from 'framer-motion';
+import EventRegistrationForm from './EventRegistrationForm.jsx';
 
 const ParticipantDashboard = () => {
   const { user, logout } = useAuth();
@@ -44,6 +45,14 @@ const ParticipantDashboard = () => {
   const [eventsLoading, setEventsLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isEventModalOpen, setEventModalOpen] = useState(false);
+  const [isRegistrationFormOpen, setRegistrationFormOpen] = useState(false);
+  
+  // Helper function to determine if an event is a team event
+  const isTeamEvent = (event) => {
+    return event.eventType === 'hackathon' || 
+           (event.minTeamSize && event.minTeamSize > 1) || 
+           (event.maxTeamSize && event.maxTeamSize > 1);
+  };
   
   // Format date to readable string
   const formatDate = (dateString) => {
@@ -488,10 +497,8 @@ const ParticipantDashboard = () => {
                     <div className="flex flex-col sm:flex-row gap-3 pt-4">
                       <button
                         onClick={() => {
-                          // Handle registration logic here
-                          console.log('Registering for event:', selectedEvent);
-                          alert(`Successfully registered for: ${selectedEvent.eventTitle}`);
                           setEventModalOpen(false);
+                          setRegistrationFormOpen(true);
                         }}
                         className="btn-primary px-6 py-3 rounded-lg border-2 font-medium flex-1 flex items-center justify-center gap-2 text-lg"
                       >
@@ -674,7 +681,11 @@ const ParticipantDashboard = () => {
                           className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
                           disabled={eventStatus === 'Ended'}
                           onClick={() => {
-                            setSelectedEvent(ev);
+                            const eventWithTeamInfo = {
+                              ...ev,
+                              teamEvent: isTeamEvent(ev)
+                            };
+                            setSelectedEvent(eventWithTeamInfo);
                             setEventModalOpen(true);
                           }}
                         >
@@ -909,6 +920,18 @@ const ParticipantDashboard = () => {
               </motion.div>
             </motion.div>
           )}
+        {isRegistrationFormOpen && selectedEvent && (
+          <EventRegistrationForm 
+            event={selectedEvent}
+            onClose={() => setRegistrationFormOpen(false)}
+            onSubmit={(formData) => {
+              console.log('Registration form submitted:', formData);
+              // Here you would typically send the data to your backend
+              alert(`Successfully registered for: ${selectedEvent.eventTitle}`);
+              setRegistrationFormOpen(false);
+            }}
+          />
+        )}
         </AnimatePresence>
       </div>
     </>
