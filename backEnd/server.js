@@ -149,18 +149,114 @@ async function writeEvents(events) {
   await fs.writeFile(EVENTS_FILE, JSON.stringify(events, null, 2));
 }
 
+// Map a Supabase row (snake_case) to camelCase keys used by the rest of the app
+function mapEventRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    aadhar: row.aadhar || row.aadhar,
+    organization: row.organization || row.organization,
+    designation: row.designation || row.designation,
+    eventTitle: row.event_title || row.eventTitle || null,
+    eventDescription: row.event_description || row.eventDescription || null,
+    startDate: row.start_date || row.startDate || null,
+    endDate: row.end_date || row.endDate || null,
+    numberOfMentors: row.number_of_mentors != null ? row.number_of_mentors : (row.numberOfMentors || 0),
+    authorizedJudges: Array.isArray(row.authorized_judges) ? row.authorized_judges : (row.authorizedJudges || []),
+    judgeEmailsText: row.judge_emails_text || row.judgeEmailsText || undefined,
+    announcements: Array.isArray(row.announcements) ? row.announcements : (row.announcements || []),
+    eventCode: row.event_code || row.eventCode || null,
+  eventType: row.event_type || row.eventType || null,
+    createdAt: row.created_at || row.createdAt || null,
+    updatedAt: row.updated_at || row.updatedAt || null,
+    // passthrough any other fields that might exist
+    _raw: row
+  };
+}
+
+// Helper: attempt insert and on PGRST204 (missing column in schema cache) remove the offending column and retry
+async function supabaseInsertWithColumnRetry(table, payload) {
+  if (!supabaseAdmin) return { data: null, error: { message: 'Supabase not configured' } };
+  let attemptPayload = { ...payload };
+  const maxAttempts = 6;
+  for (let i = 0; i < maxAttempts; i++) {
+    const { data, error } = await supabaseAdmin.from(table).insert(attemptPayload).select().single();
+    if (!error) return { data, error: null };
+    // If missing column error, remove that key and retry
+    if (error && error.code === 'PGRST204' && typeof error.message === 'string') {
+      const m = error.message.match(/Could not find the '([^']+)' column/);
+      const col = m ? m[1] : null;
+      if (!col) return { data: null, error };
+      // remove snake_case key if present
+      if (Object.prototype.hasOwnProperty.call(attemptPayload, col)) {
+        delete attemptPayload[col];
+        continue;
+      }
+      // also try camelCase variant
+      const camel = col.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      if (Object.prototype.hasOwnProperty.call(attemptPayload, camel)) {
+        delete attemptPayload[camel];
+        continue;
+      }
+      // nothing to remove -> give up
+      return { data: null, error };
+    }
+    // other errors -> return
+    return { data: null, error };
+  }
+  return { data: null, error: { message: 'Exceeded retry attempts' } };
+}
+
+// Helper: attempt update and on PGRST204 remove offending columns and retry
+async function supabaseUpdateWithColumnRetry(table, filterColumn, filterValue, payload) {
+  if (!supabaseAdmin) return { data: null, error: { message: 'Supabase not configured' } };
+  let attemptPayload = { ...payload };
+  const maxAttempts = 6;
+  for (let i = 0; i < maxAttempts; i++) {
+    const { data, error } = await supabaseAdmin.from(table).update(attemptPayload).eq(filterColumn, filterValue).select().single();
+    if (!error) return { data, error: null };
+    if (error && error.code === 'PGRST204' && typeof error.message === 'string') {
+      const m = error.message.match(/Could not find the '([^']+)' column/);
+      const col = m ? m[1] : null;
+      if (!col) return { data: null, error };
+      if (Object.prototype.hasOwnProperty.call(attemptPayload, col)) {
+        delete attemptPayload[col];
+        continue;
+      }
+      const camel = col.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      if (Object.prototype.hasOwnProperty.call(attemptPayload, camel)) {
+        delete attemptPayload[camel];
+        continue;
+      }
+      return { data: null, error };
+    }
+    return { data: null, error };
+  }
+  return { data: null, error: { message: 'Exceeded retry attempts' } };
+}
+
 // Unified event lookup: use Supabase when available, otherwise read from file
 async function findEventByIdOrCode(id) {
   if (!id) return null;
   if (supabaseAdmin) {
     try {
+      // First, try to lookup by id (UUID). If id isn't a valid UUID this can error; fall back to event_code lookup.
+      try {
+        const { data: byId, error: idErr } = await supabaseAdmin.from('events').select('*').eq('id', id).limit(1).single();
+        if (!idErr && byId) return mapEventRow(byId) || null;
+      } catch (e) {
+        // ignore invalid UUID cast errors and fall back
+      }
+
       const { data, error } = await supabaseAdmin.from('events')
         .select('*')
-        .or(`id.eq.${id},eventCode.eq.${String(id).toUpperCase()}`)
+        .or(`event_code.eq.${String(id).toUpperCase()}`)
         .limit(1)
         .single();
       if (error) return null;
-      return data || null;
+      return mapEventRow(data) || null;
     } catch (e) {
       console.warn('Supabase event lookup failed', e);
       return null;
@@ -528,6 +624,7 @@ app.post('/api/events', async (req, res) => {
     // Normalize fields
     const eventPayload = {
       id: Date.now().toString(),
+  eventType: data.eventType || data.event_type || 'event',
       name: data.name,
       email: data.email,
       aadhar: data.aadhar || null,
@@ -549,19 +646,38 @@ app.post('/api/events', async (req, res) => {
     if (supabaseAdmin) {
       // ensure uniqueness of code
       let attempts = 0;
-      const existingCodes = new Set((await supabaseAdmin.from('events').select('eventCode')).data?.map(r => (r.eventCode || '').toUpperCase()) || []);
+      const existingCodes = new Set((await supabaseAdmin.from('events').select('event_code')).data?.map(r => (r.event_code || '').toUpperCase()) || []);
       while (existingCodes.has(code.toUpperCase()) && attempts < 10) {
         code = generateEventCode(6);
         attempts++;
       }
+      // build snake_case payload for Postgres
+      // IMPORTANT: do NOT send a non-UUID `id` to Supabase if your table's id is uuid
+      // let the DB generate the UUID by omitting id from the insert payload
+      const insertPayload = {
+  event_type: eventPayload.eventType,
+        name: eventPayload.name,
+        email: eventPayload.email,
+        aadhar: eventPayload.aadhar,
+        organization: eventPayload.organization,
+        designation: eventPayload.designation,
+        event_title: eventPayload.eventTitle,
+        event_description: eventPayload.eventDescription,
+        start_date: eventPayload.startDate,
+        end_date: eventPayload.endDate,
+        number_of_mentors: eventPayload.numberOfMentors,
+        authorized_judges: eventPayload.authorizedJudges,
+        announcements: eventPayload.announcements,
+        event_code: code,
+        created_at: eventPayload.createdAt
+      };
 
-      const insertPayload = { ...eventPayload, eventCode: code, authorizedJudges: eventPayload.authorizedJudges };
-      const { data: created, error } = await supabaseAdmin.from('events').insert(insertPayload).select().single();
+      const { data: created, error } = await supabaseInsertWithColumnRetry('events', insertPayload);
       if (error) {
         console.error('Supabase insert event error', error);
         return res.status(500).json({ error: 'Failed to create event' });
       }
-      return res.status(201).json({ message: 'Event created', event: created });
+      return res.status(201).json({ message: 'Event created', event: mapEventRow(created) });
     } else {
       // fallback file-backed
       const events = await readEvents();
@@ -586,12 +702,13 @@ app.post('/api/events', async (req, res) => {
 app.get('/api/events', async (req, res) => {
   try {
     if (supabaseAdmin) {
-      const { data, error } = await supabaseAdmin.from('events').select('*').order('createdAt', { ascending: false });
+  const { data, error } = await supabaseAdmin.from('events').select('*').order('created_at', { ascending: false });
       if (error) {
         console.error('Supabase fetch events error', error);
         return res.status(500).json({ error: 'Failed to fetch events' });
       }
-      return res.json(data || []);
+  // map snake_case rows to camelCase
+  return res.json((data || []).map(mapEventRow));
     } else {
       const events = await readEvents();
       return res.json(events);
@@ -617,12 +734,29 @@ app.put('/api/events/:id', async (req, res) => {
       // prevent accidentally removing createdAt
       delete updatePayload.createdAt;
 
-      const { data: updated, error } = await supabaseAdmin.from('events').update(updatePayload).eq('id', id).select().single();
+  // translate updatePayload to snake_case for Postgres
+  const snakeUpdate = {};
+  if (updatePayload.name !== undefined) snakeUpdate.name = updatePayload.name;
+  if (updatePayload.email !== undefined) snakeUpdate.email = updatePayload.email;
+  if (updatePayload.aadhar !== undefined) snakeUpdate.aadhar = updatePayload.aadhar;
+  if (updatePayload.organization !== undefined) snakeUpdate.organization = updatePayload.organization;
+  if (updatePayload.designation !== undefined) snakeUpdate.designation = updatePayload.designation;
+  if (updatePayload.eventTitle !== undefined) snakeUpdate.event_title = updatePayload.eventTitle;
+  if (updatePayload.eventDescription !== undefined) snakeUpdate.event_description = updatePayload.eventDescription;
+  if (updatePayload.startDate !== undefined) snakeUpdate.start_date = updatePayload.startDate;
+  if (updatePayload.endDate !== undefined) snakeUpdate.end_date = updatePayload.endDate;
+  if (updatePayload.numberOfMentors !== undefined) snakeUpdate.number_of_mentors = updatePayload.numberOfMentors;
+  if (updatePayload.authorizedJudges !== undefined) snakeUpdate.authorized_judges = updatePayload.authorizedJudges;
+  if (updatePayload.announcements !== undefined) snakeUpdate.announcements = updatePayload.announcements;
+  if (updatePayload.eventCode !== undefined) snakeUpdate.event_code = updatePayload.eventCode;
+  if (updatePayload.eventType !== undefined) snakeUpdate.event_type = updatePayload.eventType;
+
+  const { data: updated, error } = await supabaseUpdateWithColumnRetry('events', 'id', id, snakeUpdate);
       if (error) {
         console.error('Supabase update event error', error);
         return res.status(500).json({ error: 'Failed to update event' });
       }
-      return res.json({ message: 'Event updated', event: updated });
+  return res.json({ message: 'Event updated', event: mapEventRow(updated) });
     } else {
       const events = await readEvents();
       const idx = events.findIndex((e) => e.id === id);
@@ -648,12 +782,12 @@ app.delete('/api/events/:id', async (req, res) => {
   try {
     const id = req.params.id;
     if (supabaseAdmin) {
-      const { data: deleted, error } = await supabaseAdmin.from('events').delete().eq('id', id).select().single();
+  const { data: deleted, error } = await supabaseAdmin.from('events').delete().eq('id', id).select().single();
       if (error) {
         console.error('Supabase delete error', error);
         return res.status(500).json({ error: 'Failed to delete event' });
       }
-      return res.json({ message: 'Event deleted', event: deleted });
+  return res.json({ message: 'Event deleted', event: mapEventRow(deleted) });
     } else {
       const events = await readEvents();
       const idx = events.findIndex((e) => e.id === id);
@@ -678,14 +812,14 @@ app.post('/api/events/:id/validate-judge', async (req, res) => {
     let ev;
     if (supabaseAdmin) {
       const { data, error } = await supabaseAdmin.from('events')
-        .select('id, eventCode, authorizedJudges')
-        .or(`id.eq.${id},eventCode.eq.${String(id).toUpperCase()}`)
+        .select('id, event_code, authorized_judges')
+        .or(`id.eq.${id},event_code.eq.${String(id).toUpperCase()}`)
         .limit(1)
         .single();
       if (error && error.code !== 'PGRST116') { // ignore not found style errors
         // PGRST116/404 mapping differs; handle absent separately
       }
-      ev = data || null;
+      ev = data ? mapEventRow(data) : null;
     } else {
       const events = await readEvents();
       ev = events.find(e => e.id === id || (e.eventCode && e.eventCode.toUpperCase() === String(id).toUpperCase()));
@@ -711,20 +845,20 @@ app.post('/api/events/:id/announcements', async (req, res) => {
 
     if (supabaseAdmin) {
       // fetch existing announcements, append, update
-      const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
+  const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
       if (fetchErr) {
         console.error('Supabase fetch event for announcements', fetchErr);
         return res.status(404).json({ error: 'Event not found' });
       }
-      const current = Array.isArray(ev.announcements) ? ev.announcements : [];
+  const current = Array.isArray(ev.announcements) ? ev.announcements : [];
       const announcement = { id: Date.now().toString(), text, author: author || 'Creator', createdAt: new Date().toISOString() };
       const updated = [...current, announcement];
-      const { data: updatedRow, error: updErr } = await supabaseAdmin.from('events').update({ announcements: updated }).eq('id', id).select().single();
+  const { data: updatedRow, error: updErr } = await supabaseUpdateWithColumnRetry('events', 'id', id, { announcements: updated });
       if (updErr) {
         console.error('Supabase update announcements error', updErr);
         return res.status(500).json({ error: 'Failed to add announcement' });
       }
-      return res.status(201).json({ message: 'Announcement added', announcement });
+  return res.status(201).json({ message: 'Announcement added', announcement });
     } else {
       const events = await readEvents();
       const idx = events.findIndex((e) => e.id === id);
@@ -749,14 +883,14 @@ app.delete('/api/events/:id/announcements/:aid', async (req, res) => {
     const aid = req.params.aid;
     if (supabaseAdmin) {
       // fetch, filter, update
-      const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
+  const { data: ev, error: fetchErr } = await supabaseAdmin.from('events').select('announcements').eq('id', id).single();
       if (fetchErr) {
         console.error('Supabase fetch event for announcements delete', fetchErr);
         return res.status(404).json({ error: 'Event not found' });
       }
       const current = Array.isArray(ev.announcements) ? ev.announcements : [];
       const filtered = current.filter(a => a.id !== aid);
-      const { data: updatedRow, error: updErr } = await supabaseAdmin.from('events').update({ announcements: filtered }).eq('id', id).select().single();
+  const { data: updatedRow, error: updErr } = await supabaseUpdateWithColumnRetry('events', 'id', id, { announcements: filtered });
       if (updErr) {
         console.error('Supabase update announcements delete error', updErr);
         return res.status(500).json({ error: 'Failed to delete announcement' });
