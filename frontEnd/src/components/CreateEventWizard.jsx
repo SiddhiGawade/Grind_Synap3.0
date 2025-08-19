@@ -86,6 +86,12 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       if (!/^\d{12}$/.test(aadharNumber)) return 'Aadhar number must be exactly 12 digits';
       if (/[^0-9]/.test(aadharNumber)) return 'Aadhar number must contain only numbers';
       if (['0', '1'].includes(aadharNumber[0])) return 'Aadhar number must start with a digit between 2-9';
+
+      // Organization validation
+      const organizationName = form.organization.trim();
+      if (organizationName && !/^[A-Za-z\s]+$/.test(organizationName)) {
+        return 'Organization name must contain only letters and spaces';
+      }
       return null;
     }
     if (step === 1) {
@@ -201,7 +207,16 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Organization</label>
-                  <input value={form.organization} onChange={(e) => update({ organization: e.target.value })} className="mt-1 w-full border p-3 rounded bg-[#fafafa]" />
+                  <input 
+                    value={form.organization} 
+                    onChange={(e) => {
+                      // Only allow letters and spaces
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, '');
+                      update({ organization: value });
+                    }}
+                    placeholder="Enter organization name"
+                    className="mt-1 w-full border p-3 rounded bg-[#fafafa]" 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Designation</label>
