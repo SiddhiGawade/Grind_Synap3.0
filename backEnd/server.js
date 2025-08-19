@@ -421,7 +421,8 @@ app.post('/api/events', async (req, res) => {
     const events = await readEvents();
     const newEvent = {
       id: Date.now().toString(),
-      ...data,
+  ...data,
+  announcements: Array.isArray(data.announcements) ? data.announcements : [],
       createdAt: new Date().toISOString()
     };
     events.push(newEvent);
@@ -440,6 +441,97 @@ app.get('/api/events', async (req, res) => {
     return res.json(events);
   } catch (err) {
     console.error('Failed to read events', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update an event
+app.put('/api/events/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const payload = req.body || {};
+    const events = await readEvents();
+    const idx = events.findIndex((e) => e.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Event not found' });
+    // Merge fields but keep id and createdAt
+    const existing = events[idx];
+  // Preserve announcements unless payload explicitly sends announcements
+  const announcements = Array.isArray(payload.announcements) ? payload.announcements : existing.announcements || [];
+  const updated = { ...existing, ...payload, id: existing.id, createdAt: existing.createdAt, announcements };
+    events[idx] = updated;
+    await writeEvents(events);
+    return res.json({ message: 'Event updated', event: updated });
+  } catch (err) {
+    console.error('Failed to update event', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete an event
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const events = await readEvents();
+    const idx = events.findIndex((e) => e.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Event not found' });
+    const removed = events.splice(idx, 1)[0];
+    await writeEvents(events);
+    return res.json({ message: 'Event deleted', event: removed });
+  } catch (err) {
+    console.error('Failed to delete event', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Announcements: list / create / delete for an event
+app.get('/api/events/:id/announcements', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const events = await readEvents();
+    const ev = events.find((e) => e.id === id);
+    if (!ev) return res.status(404).json({ error: 'Event not found' });
+    return res.json(Array.isArray(ev.announcements) ? ev.announcements : []);
+  } catch (err) {
+    console.error('Failed to list announcements', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/events/:id/announcements', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { text, author } = req.body || {};
+    if (!text) return res.status(400).json({ error: 'Missing text' });
+    const events = await readEvents();
+    const idx = events.findIndex((e) => e.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Event not found' });
+    const ev = events[idx];
+    const announcement = { id: Date.now().toString(), text, author: author || 'Creator', createdAt: new Date().toISOString() };
+    ev.announcements = ev.announcements || [];
+    ev.announcements.push(announcement);
+    events[idx] = ev;
+    await writeEvents(events);
+    return res.status(201).json({ message: 'Announcement added', announcement });
+  } catch (err) {
+    console.error('Failed to create announcement', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/events/:id/announcements/:aid', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const aid = req.params.aid;
+    const events = await readEvents();
+    const idx = events.findIndex((e) => e.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Event not found' });
+    const ev = events[idx];
+    ev.announcements = Array.isArray(ev.announcements) ? ev.announcements.filter(a => a.id !== aid) : [];
+    events[idx] = ev;
+    await writeEvents(events);
+    return res.json({ message: 'Announcement deleted' });
+  } catch (err) {
+    console.error('Failed to delete announcement', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });

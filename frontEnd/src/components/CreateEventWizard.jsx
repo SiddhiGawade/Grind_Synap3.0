@@ -15,9 +15,29 @@ const initialForm = (prefill = {}) => ({
   endDate: ''
 });
 
-const CreateEventWizard = ({ onClose, prefill = {}, onCreated }) => {
+const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(initialForm(prefill));
+  const isEdit = Boolean(event && event.id);
+
+  useEffect(() => {
+    if (isEdit) {
+      // populate form from event
+      setForm((s) => ({
+        ...s,
+        name: event.name || s.name,
+        email: event.email || s.email,
+        aadhar: event.aadhar || s.aadhar,
+        organization: event.organization || s.organization,
+        designation: event.designation || s.designation,
+        eventTitle: event.eventTitle || s.eventTitle,
+        eventDescription: event.eventDescription || s.eventDescription,
+        startDate: event.startDate || s.startDate,
+        endDate: event.endDate || s.endDate,
+        imageFilename: event.imageFilename || s.imageFilename
+      }));
+    }
+  }, [isEdit, event]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -59,8 +79,10 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated }) => {
     try {
       const payload = { ...form };
       const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/api/events`, {
-        method: 'POST',
+      const url = isEdit ? `${API_BASE}/api/events/${event.id}` : `${API_BASE}/api/events`;
+      const method = isEdit ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });

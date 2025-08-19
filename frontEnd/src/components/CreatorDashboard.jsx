@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, BarChart3 } from 'lucide-react';
+import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit } from 'lucide-react';
 import CreateEventWizard from './CreateEventWizard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const CreatorDashboard = () => {
   const { user, logout } = useAuth();
   const [showWizard, setShowWizard] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState(null);
@@ -136,14 +138,11 @@ const CreatorDashboard = () => {
                   <Plus className="w-5 h-5" />
                   Create New Event
                 </button>
-                <button className="w-full bg-white p-3 rounded-lg border-2 border-[#151616] hover:bg-[#151616]/5 transition-colors font-medium text-[#151616] flex items-center gap-2">
+                <button onClick={() => setManageOpen(true)} className="w-full bg-white p-3 rounded-lg border-2 border-[#151616] hover:bg-[#151616]/5 transition-colors font-medium text-[#151616] flex items-center gap-2">
                   <Edit className="w-5 h-5" />
                   Manage Events
                 </button>
-                <button className="w-full bg-white p-3 rounded-lg border-2 border-[#151616] hover:bg-[#151616]/5 transition-colors font-medium text-[#151616] flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />
-                  View Analytics
-                </button>
+                {/* Analytics removed per request */}
               </div>
             </div>
           </div>
@@ -171,6 +170,14 @@ const CreatorDashboard = () => {
                     <div key={ev.id} className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border-2 border-[#151616]">
                       <h4 className="font-bold text-[#151616]">{ev.eventTitle || '(Untitled Event)'}</h4>
                       <p className="text-sm text-[#151616]/70">{participants} participants • {submissions} submissions</p>
+                      <div className="mt-3">
+                        {(ev.announcements || []).slice(-3).reverse().map(a => (
+                          <div key={a.id} className="text-sm text-[#151616]/80 bg-white/50 p-2 rounded mb-2">
+                            <div className="font-medium">{a.text}</div>
+                            <div className="text-xs text-[#151616]/60">{a.author} • {new Date(a.createdAt).toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
                       <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${status === 'Active' ? 'bg-green-200 text-green-800' : status === 'Upcoming' ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-800'}`}>{status}</span>
                     </div>
                   );
@@ -209,9 +216,98 @@ const CreatorDashboard = () => {
         <CreateEventWizard
           onClose={() => setShowWizard(false)}
           prefill={{ name: user?.name || '', email: user?.email || '' }}
-          onCreated={() => fetchEvents()}
+          event={editingEvent}
+          onCreated={() => { fetchEvents(); setEditingEvent(null); }}
         />
       )}
+
+      {/* Manage events modal */}
+      {manageOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-3xl bg-white rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold">Manage Events</h3>
+              <button onClick={() => setManageOpen(false)} className="px-3 py-1 border rounded">Close</button>
+            </div>
+            <div className="space-y-3">
+              {events.length === 0 && <p className="text-sm text-[#151616]/70">No events to manage</p>}
+              {events.map((ev) => (
+                <div key={ev.id} className="p-3 rounded border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold">{ev.eventTitle || '(Untitled)'}</div>
+                      <div className="text-sm text-[#151616]/70">{ev.name} • {ev.email}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => { setEditingEvent(ev); setShowWizard(true); setManageOpen(false); }} className="px-3 py-1 bg-[#D6F32F] rounded">Edit</button>
+                      <button onClick={async () => {
+                        if (!confirm('Delete this event?')) return;
+                        try {
+                          const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+                          const res = await fetch(`${API_BASE}/api/events/${ev.id}`, { method: 'DELETE' });
+                          if (!res.ok) throw new Error('Delete failed');
+                          await fetchEvents();
+                        } catch (err) {
+                          alert(err.message || 'Delete failed');
+                        }
+                      }} className="px-3 py-1 bg-red-500 text-white rounded">Delete</button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-sm font-medium mb-2">Announcements</div>
+                    <div className="space-y-2">
+                      {(ev.announcements || []).map(a => (
+                        <div key={a.id} className="flex items-start justify-between bg-[#fafafa] p-2 rounded">
+                          <div>
+                            <div className="text-sm">{a.text}</div>
+                            <div className="text-xs text-[#151616]/60">{a.author} • {new Date(a.createdAt).toLocaleString()}</div>
+                          </div>
+                          <div>
+                            <button onClick={async () => {
+                              if (!confirm('Delete this announcement?')) return;
+                              try {
+                                const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+                                const res = await fetch(`${API_BASE}/api/events/${ev.id}/announcements/${a.id}`, { method: 'DELETE' });
+                                if (!res.ok) throw new Error('Delete failed');
+                                await fetchEvents();
+                              } catch (err) {
+                                alert(err.message || 'Delete failed');
+                              }
+                            }} className="text-xs text-red-600">Delete</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3">
+                      <input placeholder="Write an announcement" id={`ann-${ev.id}`} className="w-full border p-2 rounded" />
+                      <div className="mt-2 text-right">
+                        <button onClick={async () => {
+                          const el = document.getElementById(`ann-${ev.id}`);
+                          if (!el) return;
+                          const text = el.value.trim();
+                          if (!text) return alert('Enter text');
+                          try {
+                            const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+                            const res = await fetch(`${API_BASE}/api/events/${ev.id}/announcements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, author: user.name }) });
+                            if (!res.ok) throw new Error('Add failed');
+                            el.value = '';
+                            await fetchEvents();
+                          } catch (err) {
+                            alert(err.message || 'Add failed');
+                          }
+                        }} className="px-3 py-1 bg-[#D6F32F] rounded mt-2">Post</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+  {/* Analytics UI removed */}
     </div>
   );
 };

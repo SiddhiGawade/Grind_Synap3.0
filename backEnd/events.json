@@ -1,15 +1,29 @@
 [
   {
-    "id": "1755578295186",
+    "id": "1755581016003",
     "name": "FREDRICK NADAR",
     "email": "fred@123.com",
-    "aadhar": "723397036923",
-    "organization": "4i Studios",
-    "designation": "Founder",
-    "eventTitle": "HackerHub",
-    "eventDescription": "sdfefaedfaef",
-    "startDate": "2025-08-21",
-    "endDate": "2025-08-28",
-    "createdAt": "2025-08-19T04:38:15.186Z"
+    "aadhar": "741258963159",
+    "organization": "dsadasdasd",
+    "designation": "sdasdasdasdasdsad",
+    "eventTitle": "sdasdfgefgedfg",
+    "eventDescription": "agasdfgqwfadgfasdfasfa",
+    "startDate": "2025-08-29",
+    "endDate": "2025-08-30",
+    "announcements": [
+      {
+        "id": "1755581057853",
+        "text": "Mujhe kuch nhi pata",
+        "author": "FREDRICK NADAR",
+        "createdAt": "2025-08-19T05:24:17.853Z"
+      },
+      {
+        "id": "1755581463075",
+        "text": "Abh samajh raarha hai",
+        "author": "FREDRICK NADAR",
+        "createdAt": "2025-08-19T05:31:03.075Z"
+      }
+    ],
+    "createdAt": "2025-08-19T05:23:36.003Z"
   }
 ]
