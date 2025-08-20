@@ -29,13 +29,40 @@ const FRONTEND_BASES = FRONTEND_BASE
 
 app.use(cors({
   origin: function (origin, cb) {
+    // Debug logging
+    console.log('🔍 CORS Debug:');
+    console.log('  Incoming origin:', JSON.stringify(origin));
+    console.log('  FRONTEND_BASE env var:', JSON.stringify(process.env.FRONTEND_BASE));
+    console.log('  Parsed FRONTEND_BASES:', JSON.stringify(FRONTEND_BASES));
+    
     // Allow requests with no origin (curl, server-to-server)
-    if (!origin) return cb(null, true);
+    if (!origin) {
+      console.log('  ✅ Allowing no-origin request');
+      return cb(null, true);
+    }
+    
     const normalized = origin.replace(/\/$/, '');
+    console.log('  Normalized origin:', JSON.stringify(normalized));
+    
     // Allow configured frontend origins
-    if (FRONTEND_BASES.includes(normalized)) return cb(null, true);
+    if (FRONTEND_BASES.includes(normalized)) {
+      console.log('  ✅ Allowing configured origin');
+      return cb(null, true);
+    }
+    
     // Allow localhost origins for development (any port)
-    if (/^http:\/\/localhost(:\d+)?$/.test(normalized)) return cb(null, true);
+    if (/^http:\/\/localhost(:\d+)?$/.test(normalized)) {
+      console.log('  ✅ Allowing localhost origin');
+      return cb(null, true);
+    }
+    
+    // TEMPORARY: Also allow any .vercel.app domain for debugging
+    if (normalized.includes('.vercel.app')) {
+      console.log('  ⚠️ TEMPORARILY allowing .vercel.app domain');
+      return cb(null, true);
+    }
+    
+    console.log('  ❌ Rejecting origin');
     return cb(new Error('CORS not allowed by server'), false);
   }
 }));
