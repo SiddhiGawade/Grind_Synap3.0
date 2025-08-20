@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, FileText, Trophy, BarChart3, LogOut, Settings, Sun, Moon } from 'lucide-react';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth } from '../context/AuthContext';
+import EvaluateCandidates from './EvaluateCandidates.jsx';
 
 const JudgeDashboard = () => {
   const { user, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
+  const [eventAccessKey, setEventAccessKey] = useState('');
+  const [showEvaluatePage, setShowEvaluatePage] = useState(false);
+  const [currentEventKey, setCurrentEventKey] = useState('');
 
   // Apply theme to root element
   useEffect(() => {
@@ -17,6 +21,33 @@ const JudgeDashboard = () => {
       root.classList.remove('dark-theme');
     }
   }, [darkMode]);
+
+  // Handle event access key submission
+  const handleEventAccessSubmit = (e) => {
+    e.preventDefault();
+    if (eventAccessKey.trim()) {
+      console.log('Event Access Key submitted:', eventAccessKey);
+      setCurrentEventKey(eventAccessKey);
+      setShowEvaluatePage(true);
+      setEventAccessKey('');
+    }
+  };
+
+  // Handle back navigation from Evaluate Candidates page
+  const handleBackToDashboard = () => {
+    setShowEvaluatePage(false);
+    setCurrentEventKey('');
+  };
+
+  // Conditional rendering based on current page
+  if (showEvaluatePage) {
+    return (
+      <EvaluateCandidates 
+        onBack={handleBackToDashboard}
+        eventAccessKey={currentEventKey}
+      />
+    );
+  }
 
   return (
     <>
@@ -118,31 +149,31 @@ const JudgeDashboard = () => {
         }
 
         .welcome-banner {
-          background: linear-gradient(135deg, var(--bg-accent), var(--bg-secondary));
+          background-color: var(--bg-accent);
         }
 
         .pending-item-urgent {
-          background: linear-gradient(135deg, #FED7D7, #FBB6CE);
+          background-color: #FEE2E2;
         }
 
         .pending-item-soon {
-          background: linear-gradient(135deg, #DBEAFE, #BFDBFE);
+          background-color: #DBEAFE;
         }
 
         .pending-item-new {
-          background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
+          background-color: #D1FAE5;
         }
 
         .stats-card-blue {
-          background: linear-gradient(135deg, var(--bg-secondary), var(--bg-primary));
+          background-color: var(--bg-secondary);
         }
 
         .stats-card-green {
-          background: linear-gradient(135deg, var(--bg-accent), var(--bg-secondary));
+          background-color: var(--bg-accent);
         }
 
         .stats-card-purple {
-          background: linear-gradient(135deg, var(--bg-secondary), var(--bg-accent));
+          background-color: var(--bg-secondary);
         }
 
         .recent-eval-item {
@@ -198,8 +229,30 @@ const JudgeDashboard = () => {
           {/* Welcome Section */}
           <div className="mb-8">
             <div className="welcome-banner p-6 rounded-2xl border-2 border-themed shadow-themed-lg">
-              <h2 className="text-2xl font-black text-secondary mb-2">Judge Dashboard ⚖️</h2>
-              <p className="text-secondary opacity-80">Review submissions and provide valuable feedback to participants</p>
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex-1">
+                  <h2 className="text-2xl font-black text-secondary mb-2">Judge Dashboard ⚖️</h2>
+                  <p className="text-secondary opacity-80">Review submissions and provide valuable feedback to participants</p>
+                </div>
+                
+                <div className="lg:w-80">
+                  <form onSubmit={handleEventAccessSubmit} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={eventAccessKey}
+                      onChange={(e) => setEventAccessKey(e.target.value)}
+                      placeholder="Enter Event Access Key"
+                      className="flex-1 px-4 py-2 rounded-lg border-2 border-themed bg-primary text-primary placeholder-opacity-60 focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+                    />
+                    <button
+                      type="submit"
+                      className="btn-primary px-4 py-2 rounded-lg border-2 transition-all font-medium whitespace-nowrap cursor-pointer"
+                    >
+                      Enter
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
 
