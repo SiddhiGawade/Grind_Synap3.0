@@ -190,6 +190,9 @@ function mapEventRow(row) {
     eventMode: row.event_mode || row.eventMode,
     registrationFee: row.registration_fee || row.registrationFee,
     
+    // Image field
+    image_url: row.image_url || null,
+    
     // General fields
     announcements: Array.isArray(row.announcements) ? row.announcements : (row.announcements || []),
     eventCode: row.event_code || row.eventCode,
@@ -197,7 +200,6 @@ function mapEventRow(row) {
     updatedAt: row.updated_at || row.updatedAt
   };
 }
-
 // Helper: attempt insert and on PGRST204 (missing column in schema cache) remove the offending column and retry
 async function supabaseInsertWithColumnRetry(table, payload) {
   if (!supabaseAdmin) return { data: null, error: { message: 'Supabase not configured' } };
@@ -230,8 +232,7 @@ async function supabaseInsertWithColumnRetry(table, payload) {
   }
   return { data: null, error: { message: 'Exceeded retry attempts' } };
 }
-
-// Helper: attempt update and on PGRST204 remove offending columns and retry
+// Helper attempt update and on PGRST204 remove offending columns and retry
 async function supabaseUpdateWithColumnRetry(table, filterColumn, filterValue, payload) {
   if (!supabaseAdmin) return { data: null, error: { message: 'Supabase not configured' } };
   let attemptPayload = { ...payload };
@@ -258,7 +259,6 @@ async function supabaseUpdateWithColumnRetry(table, filterColumn, filterValue, p
   }
   return { data: null, error: { message: 'Exceeded retry attempts' } };
 }
-
 // Unified event lookup: use Supabase when available, otherwise read from file
 async function findEventByIdOrCode(id) {
   if (!id) return null;
@@ -271,7 +271,6 @@ async function findEventByIdOrCode(id) {
       } catch (e) {
         // ignore invalid UUID cast errors and fall back
       }
-
       const { data, error } = await supabaseAdmin.from('events')
         .select('*')
         .or(`event_code.eq.${String(id).toUpperCase()}`)
@@ -284,7 +283,6 @@ async function findEventByIdOrCode(id) {
       return null;
     }
   }
-
   const events = await readEvents();
   return events.find(e => e.id === id || (e.eventCode && e.eventCode.toUpperCase() === String(id).toUpperCase())) || null;
 }
@@ -296,7 +294,6 @@ function generateEventCode(len = 6) {
   for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
-
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
@@ -322,7 +319,6 @@ app.post('/api/auth/signup', async (req, res) => {
           console.warn('Failed to cleanup existing user:', cleanupErr);
           // Continue with signup anyway
         }
-
         // Create user in Supabase Auth (service role) with confirmed email
         const { data: createdUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
           email: email.toLowerCase(),
@@ -349,7 +345,6 @@ app.post('/api/auth/signup', async (req, res) => {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
-
           // Use upsert to avoid duplicate primary key errors if a profile already exists
           const { data: profileData, error: profileErr } = await supabaseAdmin
             .from('profiles')
@@ -742,6 +737,9 @@ app.post('/api/events', async (req, res) => {
         number_of_mentors: eventPayload.numberOfMentors,
         authorized_judges: eventPayload.authorizedJudges,
         
+        // Image field
+        image_url: data.image_url || null,
+        
         // Hackathon specific fields
         hackathon_mode: eventPayload.hackathonMode,
         venue: eventPayload.venue,
@@ -871,6 +869,9 @@ app.put('/api/events/:id', async (req, res) => {
       if (updatePayload.eventMode !== undefined) snakeUpdate.event_mode = updatePayload.eventMode;
       if (updatePayload.registrationFee !== undefined) snakeUpdate.registration_fee = updatePayload.registrationFee;
       
+      // Image field
+      if (updatePayload.image_url !== undefined) snakeUpdate.image_url = updatePayload.image_url;
+      
       if (updatePayload.announcements !== undefined) snakeUpdate.announcements = updatePayload.announcements;
       if (updatePayload.eventCode !== undefined) snakeUpdate.event_code = updatePayload.eventCode;
       if (updatePayload.eventType !== undefined) snakeUpdate.event_type = updatePayload.eventType;
@@ -975,7 +976,7 @@ app.post('/api/events/:id/announcements', async (req, res) => {
         return res.status(404).json({ error: 'Event not found' });
       }
       const current = Array.isArray(ev.announcements) ? ev.announcements : [];
-      const announcement = { id: Date.now().toString(), text, author: author || 'Creator', createdAt: new Date().toISOString() };
+  const announcement = { id: Date.now().toString(), text, author: author || 'Creator', created_at: new Date().toISOString() };
       const updated = [...current, announcement];
       const { data: updatedRow, error: updErr } = await supabaseUpdateWithColumnRetry('events', 'id', id, { announcements: updated });
       if (updErr) {
@@ -988,9 +989,9 @@ app.post('/api/events/:id/announcements', async (req, res) => {
       const idx = events.findIndex((e) => e.id === id);
       if (idx === -1) return res.status(404).json({ error: 'Event not found' });
       const ev = events[idx];
-      const announcement = { id: Date.now().toString(), text, author: author || 'Creator', createdAt: new Date().toISOString() };
-      ev.announcements = ev.announcements || [];
-      ev.announcements.push(announcement);
+  const announcement = { id: Date.now().toString(), text, author: author || 'Creator', created_at: new Date().toISOString() };
+  ev.announcements = ev.announcements || [];
+  ev.announcements.push(announcement);
       events[idx] = ev;
       await writeEvents(events);
       return res.status(201).json({ message: 'Announcement added', announcement });

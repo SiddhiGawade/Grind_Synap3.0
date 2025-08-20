@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import Confetti from "react-confetti";
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -74,6 +75,16 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
   const [loading, setLoading] = useState(false);
   const [createdEvent, setCreatedEvent] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+
+  // Supabase storage client (optional)
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  let supabase = null;
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    try { supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { supabase = null; }
+  }
   const [windowSize, setWindowSize] = useState({
     width: window.innerWidth,
     height: window.innerHeight
@@ -187,6 +198,48 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       const API_BASE = import.meta.env.VITE_API_BASE || 'https://your-production-api.com';
       const url = isEdit ? `${API_BASE}/api/events/${event.id}` : `${API_BASE}/api/events`;
       const method = isEdit ? 'PUT' : 'POST';
+      // If Supabase is configured and an image was selected, upload to storage first
+      if (supabase && imageFile) {
+        try {
+          console.log('🖼️ Starting Supabase image upload...', { fileName: imageFile.name, size: imageFile.size, type: imageFile.type });
+          const bucket = 'event-images'; // ensure this bucket exists in Supabase storage
+          const filename = `${Date.now()}_${imageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+          console.log('📁 Uploading to bucket:', bucket, 'filename:', filename);
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage.from(bucket).upload(filename, imageFile, { cacheControl: '3600', upsert: false });
+          
+          if (uploadError) {
+            console.error('❌ Supabase storage upload failed:', uploadError);
+            setError(`Image upload failed: ${uploadError.message}`);
+          } else {
+            console.log('✅ Upload successful:', uploadData);
+            // Get public URL (make sure bucket is public or generate signed URL)
+            const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(filename);
+            console.log('🔗 Public URL generated:', publicData);
+            payload.image_url = publicData?.publicUrl || null;
+            console.log('📦 Image URL added to payload:', payload.image_url);
+          }
+        } catch (e) {
+          console.error('💥 Supabase image upload exception:', e);
+          setError(`Image upload error: ${e.message}`);
+        }
+      } else if (imageFile) {
+        // Fallback: include base64 if Supabase not configured
+        const toBase64 = (file) => new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        try {
+          const b64 = await toBase64(imageFile);
+          payload.imageBase64 = b64;
+          payload.imageFilename = imageFile.name;
+        } catch (e) {
+          console.warn('Failed to convert image to base64', e);
+        }
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -400,6 +453,31 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                       className="input-field mt-1 w-full border-2 p-3 rounded" 
                       rows={4} 
                     />
+                  </div>
+                  {/* Image upload for event card */}
+                  <div>
+                    <label className="block text-sm font-medium text-primary">Event Image (optional)</label>
+                    <div className="mt-1 flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const f = e.target.files && e.target.files[0];
+                          if (f) {
+                            setImageFile(f);
+                            try { setImagePreview(URL.createObjectURL(f)); } catch(e) {}
+                          } else {
+                            setImageFile(null);
+                            setImagePreview(null);
+                          }
+                        }}
+                        className="input-field"
+                      />
+                      {imagePreview && (
+                        <img src={imagePreview} alt="preview" className="w-24 h-16 object-cover rounded border" />
+                      )}
+                    </div>
+                    <div className="text-xs text-primary opacity-60 mt-2">Upload an image that represents the event. Max recommended size: 2MB.</div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>

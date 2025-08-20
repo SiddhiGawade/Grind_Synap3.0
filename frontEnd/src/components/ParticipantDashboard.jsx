@@ -628,72 +628,44 @@ const ParticipantDashboard = () => {
                 <div className="col-span-3 text-primary opacity-60">No active events yet.</div>
               ) : (
                 events.map((ev) => {
-                  // Calculate event status based on dates
+                  const startDate = ev.startDate ? new Date(ev.startDate) : null;
+                  const endDate = ev.endDate ? new Date(ev.endDate) : null;
                   const today = new Date();
-                  const startDate = new Date(ev.startDate);
-                  const endDate = new Date(ev.endDate);
-                  
-                  let eventStatus = 'Active';
-                  let statusColor = 'bg-green-200 text-green-800';
-                  let timeInfo = '';
-                  
-                  if (today < startDate) {
-                    eventStatus = 'Upcoming';
-                    statusColor = 'bg-blue-200 text-blue-800';
-                    const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
-                    timeInfo = `Starts in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
-                  } else if (today > endDate) {
-                    eventStatus = 'Ended';
-                    statusColor = 'bg-gray-200 text-gray-800';
-                    timeInfo = 'Event ended';
-                  } else {
-                    eventStatus = 'Active';
-                    statusColor = 'bg-green-200 text-green-800';
-                    const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-                    timeInfo = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
-                  }
-                  
+                  const status = startDate && endDate ? (today < startDate ? 'Upcoming' : today > endDate ? 'Ended' : 'Active') : 'Active';
+
                   return (
-                    <div
-                      key={ev.id || ev.eventCode || ev.event_code}
-                      className={`p-4 rounded-lg border-2 border-themed ${eventStatus === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}
-                    >
-                      <h4 className="font-bold text-primary">
-                        {ev.eventTitle || ev.title || ev.name || 'Untitled Event'}
-                      </h4>
-                      {ev.eventDescription && (
-                        <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>
-                      )}
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
-                          {eventStatus}
-                        </span>
-                        <span className="text-xs text-primary opacity-60">{timeInfo}</span>
+                    <div key={ev.id || ev.eventCode || ev.event_code} className={`rounded-lg border-2 border-themed overflow-hidden ${status === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}>
+                      <div className="w-full h-40 bg-gray-100 overflow-hidden">
+                        <img
+                          src={ev.image_url || ev.imageUrl || getEventField(ev, 'image_url', 'imageUrl') || ''}
+                          alt={ev.eventTitle || ev.title || 'Event image'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
                       </div>
-                      <div className="text-xs text-primary opacity-50 mb-3">
-                        {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-primary opacity-60">
-                          Code: {ev.eventCode || ev.event_code}
-                        </span>
-                        <button
-                          className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
-                          disabled={eventStatus === 'Ended'}
-                          onClick={() => {
-                            const eventWithTeamInfo = {
-                              ...ev,
-                              teamEvent: isTeamEvent(ev)
-                            };
-                            setSelectedEvent(eventWithTeamInfo);
-                            setEventModalOpen(true);
-                          }}
-                        >
-                          {eventStatus === 'Ended' ? 'Ended' : 'Register'}
-                        </button>
+
+                      <div className="p-4">
+                        <h4 className="font-bold text-primary">{ev.eventTitle || ev.title || ev.name || 'Untitled Event'}</h4>
+                        {ev.eventDescription && <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-xs px-2 py-1 rounded-full ${status === 'Ended' ? 'bg-gray-200 text-gray-800' : status === 'Upcoming' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'}`}>
+                            {status}
+                          </span>
+                          <span className="text-xs text-primary opacity-60">{startDate ? startDate.toLocaleDateString() : 'TBA'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-primary opacity-60">Code: {ev.eventCode || ev.event_code}</span>
+                          <button
+                            className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
+                            disabled={status === 'Ended'}
+                            onClick={() => { setSelectedEvent({ ...ev, teamEvent: isTeamEvent(ev) }); setEventModalOpen(true); }}
+                          >
+                            {status === 'Ended' ? 'Ended' : 'Register'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  )
+                  );
                 })
               )}
             </div>

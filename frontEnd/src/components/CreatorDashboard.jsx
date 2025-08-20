@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit } from 'lucide-react';
+import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Trash2, Send } from 'lucide-react';
 import CreateEventWizard from './CreateEventWizard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -11,8 +11,63 @@ const CreatorDashboard = () => {
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState(null);
+  const [announcementInputs, setAnnouncementInputs] = useState({});
 
   const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+
+  // Normalize announcement item (supports string entries or objects and multiple timestamp keys)
+  const normalizeAnnouncement = (a) => {
+  if (!a) return { text: '', author: '', createdAt: null, id: null };
+  
+  // If it's a string that looks like JSON, try to parse it
+  if (typeof a === 'string') {
+    if (a.startsWith('{') && a.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(a);
+        return {
+          text: parsed.text || parsed.message || '',
+          author: parsed.author || parsed.by || '',
+          createdAt: parsed.createdAt || parsed.created_at || parsed.created || null,
+          id: parsed.id || null
+        };
+      } catch (e) {
+        // If parsing fails, treat as plain text
+        return { text: a, author: '', createdAt: null, id: null };
+      }
+    } else {
+      // Plain string
+      return { text: a, author: '', createdAt: null, id: null };
+    }
+  }
+  
+  // If it's already an object
+  return {
+    text: a.text || a.message || String(a),
+    author: a.author || a.by || '',
+    createdAt: a.createdAt || a.created_at || a.created || null,
+    id: a.id || null
+  };
+};
+
+  // Safely format announcement date with relative time
+  const formatDateSafe = (v) => {
+  if (!v) return '';
+  try {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    // Use toLocaleString for a readable date and time
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      
+    });
+  } catch (e) {
+    return '';
+  }
+};
 
   const fetchEvents = async () => {
     setLoadingEvents(true);
@@ -73,7 +128,28 @@ const CreatorDashboard = () => {
         .modal-content { background-color: var(--bg-primary); border-color: var(--border-color); }
         .input-field { background-color: var(--bg-primary); color: var(--text-primary); border-color: var(--border-color); }
         .btn-delete { background-color: #ef4444; color: white; }
-        .announcement-item { background-color: var(--bg-primary); opacity: 0.9; }
+        
+        /* Enhanced announcement styles */
+        .announcement-card {
+          background: linear-gradient(135deg, var(--bg-primary) 0%, rgba(242, 237, 209, 0.8) 100%);
+          backdrop-filter: blur(10px);
+          transition: all 0.2s ease;
+        }
+        
+        .announcement-card:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(40, 10, 62, 0.1);
+        }
+        
+        .announcement-input:focus {
+          background-color: rgba(242, 237, 209, 0.9);
+        }
+        
+        .announcement-meta {
+          background: rgba(40, 10, 62, 0.05);
+          border-radius: 6px;
+          padding: 4px 8px;
+        }
       `}</style>
 
       <div className="min-h-screen transition-colors duration-500 bg-primary">
@@ -124,6 +200,7 @@ const CreatorDashboard = () => {
               </div>
             </div>
           </div>
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
@@ -171,6 +248,7 @@ const CreatorDashboard = () => {
               </div>
             </div>
           </div>
+
           {/* Recent Events & Performance */}
           <div className="grid grid-cols-1 gap-6 mb-8">
             <div className="space-y-6">
@@ -193,30 +271,62 @@ const CreatorDashboard = () => {
                     }
                     const participants = Array.isArray(ev.participants) ? ev.participants.length : 0;
                     const submissions = Array.isArray(ev.submissions) ? ev.submissions.length : 0;
-                    return (
-                      <div key={ev.id} className="bg-primary p-4 rounded-lg border-2 border-themed">
-                        <h4 className="font-bold text-primary">{ev.eventTitle || '(Untitled Event)'}</h4>
-                        <p className="text-sm text-primary opacity-70">{participants} participants • {submissions} submissions</p>
-                        <div className="mt-3">
-                          {(ev.announcements || []).slice(-3).reverse().map(a => (
-                            <div key={a.id} className="announcement-item text-sm text-primary p-2 rounded mb-2">
-                              <div className="font-medium">{a.text}</div>
-                              <div className="text-xs text-primary opacity-60">{a.author} • {new Date(a.createdAt).toLocaleString()}</div>
-                            </div>
-                          ))}
+                      return (
+                        <div key={ev.id} className="rounded-lg border-2 border-themed overflow-hidden bg-primary">
+                          <div className="w-full h-28 bg-gray-100 overflow-hidden">
+                            <img src={ev.image_url || ev.imageUrl || ''} alt={ev.eventTitle || '(Event image)'} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+                          </div>
+                          <div className="p-4">
+                            <h4 className="font-bold text-primary">{ev.eventTitle || '(Untitled Event)'}</h4>
+                            <p className="text-sm text-primary opacity-70">{participants} participants • {submissions} submissions</p>
+                            
+                            <div className="mt-3">
+  <div className="text-sm font-medium mb-2 text-primary">Recent Announcements</div>
+  {(ev.announcements || []).slice(-3).reverse().map((raw, index) => {
+    const a = normalizeAnnouncement(raw);
+    
+    // Debug log to see what we're getting
+    console.log('Raw announcement:', raw);
+    console.log('Normalized announcement:', a);
+    
+    return (
+      <div key={a.id || index} className="bg-white/20 backdrop-blur-sm border border-primary/20 rounded-lg p-3 mb-2 shadow-sm">
+        <div className="flex items-start gap-2">
+          <div className="w-2 h-2 bg-accent rounded-full mt-2 flex-shrink-0"></div>
+          <div className="flex-1">
+            <p className="text-primary font-medium leading-relaxed">
+              {a.text || 'No announcement text'}
+            </p>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs text-primary/60 font-medium">
+                {formatDateSafe(a.createdAt)}
+              </span>
+              {a.author && (
+                <span className="text-xs text-primary/50 italic">
+                  by {a.author}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  })}
+  {(!ev.announcements || ev.announcements.length === 0) && (
+    <div className="text-xs text-primary opacity-50 italic text-center py-2">
+      No announcements yet
+    </div>
+  )}
+</div>
+                            
+                            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${status === 'Active' ? 'bg-green-200 text-green-800' : status === 'Upcoming' ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-800'}`}>{status}</span>
+                          </div>
                         </div>
-                        <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
-                          status === 'Active'
-                            ? 'bg-green-200 text-green-800'
-                            : status === 'Upcoming'
-                            ? 'bg-blue-200 text-blue-800'
-                            : 'bg-gray-200 text-gray-800'
-                        }`}>{status}</span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               </div>
+                
               {/* Event Performance */}
               <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
                 <h3 className="text-lg font-bold text-primary mb-6">Event Performance Overview</h3>
@@ -264,87 +374,122 @@ const CreatorDashboard = () => {
         {/* Manage events modal */}
         {manageOpen && (
           <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-6">
-            <div className="modal-content w-full max-w-3xl rounded-xl border-2 border-themed shadow-themed-xl p-6">
+            <div className="modal-content w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl border-2 border-themed shadow-themed-xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-primary">Manage Events</h3>
                 <button onClick={() => setManageOpen(false)} className="btn-secondary px-3 py-1 border rounded">Close</button>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {events.length === 0 && <p className="text-sm text-primary opacity-70">No events to manage</p>}
                 {events.map((ev) => (
-                  <div key={ev.id} className="p-3 rounded border border-themed bg-secondary">
-                    <div className="flex items-center justify-between">
+                  <div key={ev.id} className="p-4 rounded border border-themed bg-secondary">
+                    <div className="flex items-center justify-between mb-4">
                       <div>
                         <div className="font-semibold text-primary">{ev.eventTitle || '(Untitled)'}</div>
                         <div className="text-sm text-primary opacity-70">{ev.name} • {ev.email}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button onClick={() => { setEditingEvent(ev); setShowWizard(true); setManageOpen(false); }} className="btn-primary px-3 py-1 rounded">Edit</button>
-                        <button
-                          onClick={async () => {
-                            if (!confirm('Delete this event?')) return;
-                            try {
-                              const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
-                              const res = await fetch(`${API_BASE}/api/events/${ev.id}`, { method: 'DELETE' });
-                              if (!res.ok) throw new Error('Delete failed');
-                              await fetchEvents();
-                            } catch (err) {
-                              alert(err.message || 'Delete failed');
-                            }
-                          }}
-                          className="btn-delete px-3 py-1 rounded"
-                        >Delete</button>
+                        
                       </div>
                     </div>
-                    <div className="mt-3">
-                      <div className="text-sm font-medium mb-2 text-primary">Announcements</div>
-                      <div className="space-y-2">
-                        {(ev.announcements || []).map(a => (
-                          <div key={a.id} className="announcement-item flex items-start justify-between p-2 rounded">
-                            <div>
-                              <div className="text-sm text-primary">{a.text}</div>
-                              <div className="text-xs text-primary opacity-60">{a.author} • {new Date(a.createdAt).toLocaleString()}</div>
+                    
+                    <div className="mt-4">
+                      <div className="text-sm font-medium mb-3 text-primary">Announcements</div>
+                      
+                      {/* Enhanced Announcements Display */}
+                      <div className="space-y-3">
+                        {(ev.announcements || []).map((raw, index) => {
+                          const a = normalizeAnnouncement(raw);
+                          return (
+                            <div key={a.id || index} className="announcement-item border-l-4 border-accent bg-white/30 backdrop-blur-sm rounded-r-lg p-3 shadow-sm">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1">
+                                  <div className="bg-white/50 rounded-lg p-2 mb-2">
+                                    <p className="text-primary font-medium leading-relaxed">{a.text}</p>
+                                  </div>
+                                  <div className="flex items-center gap-4 text-xs">
+                                    <span className="flex items-center gap-1 text-primary/70">
+                                      <Calendar className="w-3 h-3" />
+                                      {formatDateSafe(a.createdAt)}
+                                    </span>
+                                    {a.author && (
+                                      <span className="flex items-center gap-1 text-primary/60">
+                                        <Users className="w-3 h-3" />
+                                        {a.author}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                              </div>
                             </div>
-                            <div>
-                              <button
-                                onClick={async () => {
-                                  if (!confirm('Delete this announcement?')) return;
-                                  try {
-                                    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
-                                    const res = await fetch(`${API_BASE}/api/events/${ev.id}/announcements/${a.id}`, { method: 'DELETE' });
-                                    if (!res.ok) throw new Error('Delete failed');
-                                    await fetchEvents();
-                                  } catch (err) {
-                                    alert(err.message || 'Delete failed');
-                                  }
-                                }}
-                                className="text-xs text-red-600"
-                              >Delete</button>
+                          );
+                        })}
+                        {(!ev.announcements || ev.announcements.length === 0) && (
+                          <div className="text-center py-8">
+                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <FileText className="w-6 h-6 text-primary/40" />
                             </div>
+                            <p className="text-sm text-primary/50">No announcements yet</p>
+                            <p className="text-xs text-primary/40">Create your first announcement below</p>
                           </div>
-                        ))}
+                        )}
                       </div>
-                      <div className="mt-3">
-                        <input placeholder="Write an announcement" id={`ann-${ev.id}`} className="input-field w-full border-2 p-2 rounded" />
-                        <div className="mt-2 text-right">
-                          <button
-                            onClick={async () => {
-                              const el = document.getElementById(`ann-${ev.id}`);
-                              if (!el) return;
-                              const text = el.value.trim();
-                              if (!text) return alert('Enter text');
-                              try {
-                                const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
-                                const res = await fetch(`${API_BASE}/api/events/${ev.id}/announcements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, author: user.name }) });
-                                if (!res.ok) throw new Error('Add failed');
-                                el.value = '';
-                                await fetchEvents();
-                              } catch (err) {
-                                alert(err.message || 'Add failed');
-                              }
-                            }}
-                            className="btn-primary px-3 py-1 rounded mt-2"
-                          >Post</button>
+                      
+                      {/* Enhanced Announcement Input */}
+                      <div className="mt-4 bg-white/20 backdrop-blur-sm rounded-lg p-4 border border-primary/20">
+                        <div className="text-sm font-medium mb-3 text-primary flex items-center gap-2">
+                          <Plus className="w-4 h-4" />
+                          Add New Announcement
+                        </div>
+                        <div className="space-y-3">
+                          <textarea
+                            placeholder="Share updates, important information, or reminders with participants..."
+                            value={announcementInputs[ev.id] || ''}
+                            onChange={(e) => setAnnouncementInputs(prev => ({ ...prev, [ev.id]: e.target.value }))}
+                            className="input-field w-full border-2 p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent announcement-input"
+                            rows="3"
+                          />
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs text-primary/60">
+                              {(announcementInputs[ev.id] || '').length}/500 characters
+                            </div>
+                            <button
+                              onClick={async () => {
+                                const text = (announcementInputs[ev.id] || '').trim();
+                                if (!text) return alert('Please enter announcement text');
+                                if (text.length > 500) return alert('Announcement too long (max 500 characters)');
+                                
+                                try {
+                                  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+                                  const res = await fetch(`${API_BASE}/api/events/${ev.id}/announcements`, { 
+                                    method: 'POST', 
+                                    headers: { 'Content-Type': 'application/json' }, 
+                                    body: JSON.stringify({ text, author: user.name }) 
+                                  });
+                                  if (!res.ok) {
+                                    const errText = await res.text().catch(() => 'Failed to post announcement');
+                                    throw new Error(errText || 'Failed to post announcement');
+                                  }
+                                  // Clear input and refresh events
+                                  setAnnouncementInputs(prev => ({ ...prev, [ev.id]: '' }));
+                                  await fetchEvents();
+                                } catch (err) {
+                                  alert(err.message || 'Failed to post announcement');
+                                }
+                              }}
+                              disabled={!(announcementInputs[ev.id] || '').trim()}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                                (announcementInputs[ev.id] || '').trim() 
+                                  ? 'btn-primary shadow-themed hover:shadow-themed-lg' 
+                                  : 'bg-primary/20 text-primary/40 cursor-not-allowed'
+                              }`}
+                            >
+                              <Send className="w-4 h-4" />
+                              Post Announcement
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
