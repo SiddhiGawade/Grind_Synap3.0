@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Confetti from "react-confetti";
 import { motion, AnimatePresence } from 'framer-motion';
+import emailjs from '@emailjs/browser';
 
 // 4-step wizard: Host -> Event -> Mentors -> Confirmation
 const steps = ['Host details', 'Event details', 'Mentors', 'Confirmation'];
@@ -85,6 +86,108 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     try { supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { supabase = null; }
   }
+
+  // Updated sendEmailToJudges function to match your EmailJS template
+  const sendEmailToJudges = async (judges, eventCode, eventDetails) => {
+    console.log('Starting email sending process...', { judges, eventCode });
+    
+    const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID?.replace(/['"]/g, '');
+    const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID?.replace(/['"]/g, '');
+    const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY?.replace(/['"]/g, '');
+
+    console.log('EmailJS Config:', { 
+      serviceId: EMAILJS_SERVICE_ID,
+      templateId: EMAILJS_TEMPLATE_ID,
+      hasPublicKey: !!EMAILJS_PUBLIC_KEY
+    });
+
+    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
+      console.error('Missing EmailJS configuration!');
+      throw new Error('EmailJS configuration missing');
+    }
+
+    try {
+      // Initialize EmailJS with public key
+      console.log('Initializing EmailJS...');
+      emailjs.init({
+        publicKey: EMAILJS_PUBLIC_KEY,
+        // Limit rate to prevent spam
+        limitRate: {
+          throttle: 10000, // 10 seconds between requests
+        },
+      });
+
+      // Test EmailJS configuration first
+      console.log('Testing EmailJS configuration...');
+      
+      // Send email to each judge
+      console.log('Preparing to send emails to judges...');
+      const emailPromises = judges.map(async judgeEmail => {
+        // Get judge name from availableJudges list
+        const judge = availableJudges.find(j => j.email === judgeEmail);
+        const judgeName = judge ? judge.name : judgeEmail.split('@')[0];
+
+        // EmailJS template parameters matching your template format
+        const templateParams = {
+          // Core EmailJS template parameters
+          to_email: judgeEmail,
+          to_name: judgeName,
+          from_name: eventDetails.name,
+          reply_to: eventDetails.email,
+          
+          // Template-specific parameters (matching your template exactly)
+          event_name: eventDetails.eventTitle,  // For {{event_name}}
+          event_code: eventCode,  // For {{event_code}}
+          event_date: eventDetails.startDate && eventDetails.endDate 
+            ? `${eventDetails.startDate} to ${eventDetails.endDate}`
+            : eventDetails.startDate || 'TBA',  // For {{event_date}}
+          host_name: eventDetails.name,  // For {{host_name}}
+          host_email: eventDetails.email  // For {{host_email}}
+        };
+
+        console.log('Sending email to:', judgeEmail, 'with params:', templateParams);
+        console.log('Using service:', EMAILJS_SERVICE_ID, 'template:', EMAILJS_TEMPLATE_ID);
+        console.log('Event details received:', {
+          eventTitle: eventDetails.eventTitle,
+          eventCode: eventCode,
+          startDate: eventDetails.startDate,
+          endDate: eventDetails.endDate,
+          hostName: eventDetails.name,
+          hostEmail: eventDetails.email
+        });
+        
+        try {
+          const result = await emailjs.send(
+            EMAILJS_SERVICE_ID,
+            EMAILJS_TEMPLATE_ID,
+            templateParams
+          );
+          console.log('Email sent successfully to:', judgeEmail, result);
+          return result;
+        } catch (emailError) {
+          console.error('Failed to send email to:', judgeEmail, emailError);
+          // Log more details about the error
+          console.error('Error details:', {
+            status: emailError.status,
+            text: emailError.text,
+            message: emailError.message,
+            templateParams: templateParams,
+            serviceId: EMAILJS_SERVICE_ID,
+            templateId: EMAILJS_TEMPLATE_ID
+          });
+          throw emailError;
+        }
+      });
+
+      const results = await Promise.all(emailPromises);
+      console.log('✅ Successfully sent emails to all judges:', results);
+      return results;
+    } catch (error) {
+      console.error('Failed to send emails:', error);
+      throw error;
+    }
+  };
+
   const [windowSize, setWindowSize] = useState({
     width: window.innerWidth,
     height: window.innerHeight
@@ -106,7 +209,7 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
     const fetchJudges = async () => {
       setJudgesLoading(true);
       try {
-        const API_BASE = import.meta.env.VITE_API_BASE || 'https://your-production-api.com';
+        const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
         const res = await fetch(`${API_BASE}/api/judges`);
         const data = await res.json();
         if (res.ok) {
@@ -181,43 +284,43 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
     if (v) return setError(v);
     setLoading(true);
     setError(null);
+    
     try {
-      // Build payload and use selectedJudges directly
+      // Build payload
       const payload = { ...form };
       if (Array.isArray(form.selectedJudges)) {
         payload.authorizedJudges = form.selectedJudges;
       } else {
         payload.authorizedJudges = [];
       }
-      // Remove selectedJudges from payload as backend expects authorizedJudges
       delete payload.selectedJudges;
-      // If mentorEmails exists, send it as mentorEmails
+      
       if (Array.isArray(form.mentorEmails)) {
         payload.mentorEmails = form.mentorEmails;
       }
-      const API_BASE = import.meta.env.VITE_API_BASE || 'https://your-production-api.com';
+
+      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
       const url = isEdit ? `${API_BASE}/api/events/${event.id}` : `${API_BASE}/api/events`;
       const method = isEdit ? 'PUT' : 'POST';
-      // If Supabase is configured and an image was selected, upload to storage first
+
+      // Handle image upload
       if (supabase && imageFile) {
         try {
-          console.log('🖼️ Starting Supabase image upload...', { fileName: imageFile.name, size: imageFile.size, type: imageFile.type });
-          const bucket = 'event-images'; // ensure this bucket exists in Supabase storage
+          console.log('🖼️ Starting Supabase image upload...');
+          const bucket = 'event-images';
           const filename = `${Date.now()}_${imageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-          console.log('📁 Uploading to bucket:', bucket, 'filename:', filename);
           
-          const { data: uploadData, error: uploadError } = await supabase.storage.from(bucket).upload(filename, imageFile, { cacheControl: '3600', upsert: false });
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(filename, imageFile, { cacheControl: '3600', upsert: false });
           
           if (uploadError) {
             console.error('❌ Supabase storage upload failed:', uploadError);
             setError(`Image upload failed: ${uploadError.message}`);
           } else {
             console.log('✅ Upload successful:', uploadData);
-            // Get public URL (make sure bucket is public or generate signed URL)
             const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(filename);
-            console.log('🔗 Public URL generated:', publicData);
             payload.image_url = publicData?.publicUrl || null;
-            console.log('📦 Image URL added to payload:', payload.image_url);
           }
         } catch (e) {
           console.error('💥 Supabase image upload exception:', e);
@@ -240,25 +343,49 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
         }
       }
 
+      // Create/update event
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      
       const data = await res.json().catch(() => ({}));
       setLoading(false);
-      if (!res.ok) return setError(data.error || 'Failed to create event');
-      setSuccess(data.message || 'Event created successfully');
-      // keep created event in local state so we can show the generated eventCode
-      setCreatedEvent(data.event || null);
+      
+      if (!res.ok) {
+        return setError(data.error || 'Failed to create event');
+      }
+      
+      const createdEventData = data.event || null;
+      setCreatedEvent(createdEventData);
+      
+      // Send emails to judges if we have authorized judges
+      if (createdEventData && Array.isArray(form.selectedJudges) && form.selectedJudges.length > 0) {
+        try {
+          console.log('Attempting to send emails to judges:', form.selectedJudges);
+          await sendEmailToJudges(form.selectedJudges, createdEventData.eventCode, {
+            ...form,
+            ...createdEventData
+          });
+          setSuccess('Event created successfully and notification emails sent to judges!');
+        } catch (emailError) {
+          console.error('Email sending failed:', emailError);
+          setSuccess('Event created successfully but failed to send notification emails to judges');
+          setError('Failed to send emails to judges: ' + (emailError.message || 'Unknown error'));
+        }
+      } else {
+        setSuccess(data.message || 'Event created successfully');
+      }
+
       // Show celebration animation
       setShowCelebration(true);
-      setTimeout(() => setShowCelebration(false), 5000); // Hide confetti after 5 seconds
-      // notify parent immediately so lists can refresh, but do not close the modal
+      setTimeout(() => setShowCelebration(false), 5000);
+      
       if (onCreated) {
-        try { onCreated(data.event || null); } catch (e) {}
+        try { onCreated(createdEventData); } catch (e) {}
       }
-      // move user to confirmation step so they can copy/share the event code
+      
       setStep(steps.length - 1);
     } catch (err) {
       setLoading(false);
@@ -1047,3 +1174,5 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
 };
 
 export default CreateEventWizard;
+
+
