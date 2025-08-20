@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, FileText, Trophy, BarChart3, LogOut, Settings, Sun, Moon } from 'lucide-react';
+import { Calendar, FileText, Trophy, BarChart3, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import EvaluateCandidates from './EvaluateCandidates.jsx';
 
@@ -9,6 +9,11 @@ const JudgeDashboard = () => {
   const [eventAccessKey, setEventAccessKey] = useState('');
   const [showEvaluatePage, setShowEvaluatePage] = useState(false);
   const [currentEventKey, setCurrentEventKey] = useState('');
+  const [currentEvent, setCurrentEvent] = useState(null);
+  const [submissions, setSubmissions] = useState([]);
+  const [assignedEvents, setAssignedEvents] = useState([]);
+  const [assignedSubmissions, setAssignedSubmissions] = useState([]);
+  const [loadingAssigned, setLoadingAssigned] = useState(false);
 
   // Apply theme to root element
   useEffect(() => {
@@ -23,13 +28,54 @@ const JudgeDashboard = () => {
   }, [darkMode]);
 
   // Handle event access key submission
-  const handleEventAccessSubmit = (e) => {
+  const handleEventAccessSubmit = async (e) => {
     e.preventDefault();
-    if (eventAccessKey.trim()) {
-      console.log('Event Access Key submitted:', eventAccessKey);
-      setCurrentEventKey(eventAccessKey);
+    const key = (eventAccessKey || '').trim();
+    if (!key) return alert('Please enter an event access key');
+
+    try {
+      // Validate event exists and judge authorization using backend endpoint
+      const validateRes = await fetch(`/api/events/${encodeURIComponent(key)}/validate-judge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user?.email || '' })
+      });
+
+      if (validateRes.status === 404) return alert('Event not found for the provided access key');
+      if (validateRes.status === 401) return alert('You are not authorized as a judge for this event');
+      if (!validateRes.ok) {
+        const txt = await validateRes.text().catch(() => 'Unknown error');
+        return alert('Failed to validate access key: ' + txt);
+      }
+
+      // Validation passed — fetch event details from events list and submissions for that event
+      const eventsRes = await fetch('/api/events');
+      if (!eventsRes.ok) throw new Error('Failed to load events');
+      const events = await eventsRes.json();
+      // find by id or eventCode (case-insensitive)
+      const found = (events || []).find(ev => {
+        if (!ev) return false;
+        const id = ev.id || ev.eventId || ev.event_code || ev.eventCode;
+        const code = ev.eventCode || ev.event_code || ev.eventCode;
+        return String(id) === key || String(id || '').toLowerCase() === key.toLowerCase() || String(code || '').toLowerCase() === key.toLowerCase();
+      });
+
+      if (!found) return alert('Event found during validation but failed to load full event details');
+
+      // fetch submissions for this event
+      const eventId = found.id || found.eventId || found.event_code || found.eventCode || key;
+      const subsRes = await fetch(`/api/submissions?eventId=${encodeURIComponent(eventId)}`);
+      if (!subsRes.ok) throw new Error('Failed to load submissions');
+      const subs = await subsRes.json();
+
+      setCurrentEvent(found);
+      setSubmissions(Array.isArray(subs) ? subs : []);
+      setCurrentEventKey(key);
       setShowEvaluatePage(true);
       setEventAccessKey('');
+    } catch (err) {
+      console.error('Judge access error', err);
+      alert('Could not validate access key: ' + (err.message || err));
     }
   };
 
@@ -39,12 +85,60 @@ const JudgeDashboard = () => {
     setCurrentEventKey('');
   };
 
+  // Load events & submissions for this judge
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!user?.email) return;
+      setLoadingAssigned(true);
+      try {
+        const [evRes, subRes] = await Promise.all([fetch('/api/events'), fetch('/api/submissions')]);
+        if (!evRes.ok || !subRes.ok) {
+          setAssignedEvents([]);
+          setAssignedSubmissions([]);
+          setLoadingAssigned(false);
+          return;
+        }
+        const events = await evRes.json();
+        const subs = await subRes.json();
+        const email = (user.email || '').toLowerCase();
+        const assigned = (events || []).filter(ev => Array.isArray(ev.authorizedJudges) && ev.authorizedJudges.map(a => String(a).toLowerCase()).includes(email));
+        const assignedIds = new Set(assigned.map(e => e.id || e.eventCode || e.event_code));
+        const assignedSubs = (subs || []).filter(s => assignedIds.has(s.event_id) || assignedIds.has(s.eventId) || assignedIds.has(s.event_code) || assignedIds.has(s.eventCode) || assignedIds.has(s.event));
+        if (!mounted) return;
+        setAssignedEvents(assigned);
+        setAssignedSubmissions(Array.isArray(assignedSubs) ? assignedSubs : []);
+      } catch (err) {
+        console.error('Failed to load judge assignments', err);
+        if (mounted) {
+          setAssignedEvents([]);
+          setAssignedSubmissions([]);
+        }
+      } finally {
+        if (mounted) setLoadingAssigned(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [user]);
+
+  const handleOpenEvaluateForEvent = (ev) => {
+    // open EvaluateCandidates for this event
+    const eventId = ev.id || ev.eventCode || ev.event_code;
+    const subs = assignedSubmissions.filter(s => (s.event_id === eventId) || (s.eventId === eventId) || (s.event_code === eventId) || (s.eventCode === eventId) || (s.event === eventId));
+    setCurrentEvent(ev);
+    setSubmissions(subs || []);
+    setShowEvaluatePage(true);
+  };
+
   // Conditional rendering based on current page
   if (showEvaluatePage) {
     return (
       <EvaluateCandidates 
         onBack={handleBackToDashboard}
-        eventAccessKey={currentEventKey}
+  eventAccessKey={currentEventKey}
+  event={currentEvent}
+  submissions={submissions}
       />
     );
   }
@@ -256,43 +350,43 @@ const JudgeDashboard = () => {
             </div>
           </div>
 
-          {/* Stats Cards */}
+          {/* Stats Cards (dynamic) */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-primary opacity-60 text-sm">Assigned Events</p>
-                  <p className="text-3xl font-black text-primary">4</p>
+                  <p className="text-3xl font-black text-primary">{assignedEvents.length}</p>
                 </div>
                 <Calendar className="w-8 h-8 text-accent" />
               </div>
             </div>
-            
+
             <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-primary opacity-60 text-sm">Pending Reviews</p>
-                  <p className="text-3xl font-black text-primary">12</p>
+                  <p className="text-3xl font-black text-primary">{assignedSubmissions.length}</p>
                 </div>
                 <FileText className="w-8 h-8 text-accent" />
               </div>
             </div>
-            
+
             <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-primary opacity-60 text-sm">Completed Reviews</p>
-                  <p className="text-3xl font-black text-primary">28</p>
+                  <p className="text-3xl font-black text-primary">{/* derivable from submissions with scores; placeholder */}0</p>
                 </div>
                 <Trophy className="w-8 h-8 text-accent" />
               </div>
             </div>
-            
+
             <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-primary opacity-60 text-sm">Average Score</p>
-                  <p className="text-3xl font-black text-primary">8.2</p>
+                  <p className="text-3xl font-black text-primary">-</p>
                 </div>
                 <BarChart3 className="w-8 h-8 text-accent" />
               </div>
@@ -304,105 +398,33 @@ const JudgeDashboard = () => {
             <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
               <h3 className="text-lg font-bold text-primary mb-4">Judging Tasks</h3>
               <div className="space-y-3">
-                <button className="btn-primary w-full p-3 rounded-lg border-2 transition-all font-medium flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Review Submissions
-                </button>
-                <button className="btn-secondary w-full p-3 rounded-lg border-2 hover:bg-secondary transition-colors font-medium flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />
-                  View Scores
-                </button>
-                <button className="btn-secondary w-full p-3 rounded-lg border-2 hover:bg-secondary transition-colors font-medium flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  Judging Criteria
-                </button>
-              </div>
-            </div>
-            
-            <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
-              <h3 className="text-lg font-bold text-primary mb-4">Pending Reviews</h3>
-              <div className="space-y-3">
-                <div className="p-4 pending-item-urgent rounded-lg border-2 border-themed">
-                  <h4 className="font-bold text-primary">AI Chat Assistant</h4>
-                  <p className="text-sm text-primary opacity-70">Team Alpha • AI Innovation Challenge</p>
-                  <span className="inline-block mt-2 px-3 py-1 bg-red-200 text-red-800 rounded-full text-xs font-medium">Urgent</span>
-                </div>
-                <div className="p-4 pending-item-soon rounded-lg border-2 border-themed">
-                  <h4 className="font-bold text-primary">DeFi Trading Platform</h4>
-                  <p className="text-sm text-primary opacity-70">Team Beta • Web3 Hackathon</p>
-                  <span className="inline-block mt-2 px-3 py-1 bg-yellow-200 text-yellow-800 rounded-full text-xs font-medium">Due Soon</span>
-                </div>
-                <div className="p-4 pending-item-new rounded-lg border-2 border-themed">
-                  <h4 className="font-bold text-primary">Smart Contract Analyzer</h4>
-                  <p className="text-sm text-primary opacity-70">Team Gamma • Blockchain Summit</p>
-                  <span className="inline-block mt-2 px-3 py-1 bg-gray-200 text-gray-800 rounded-full text-xs font-medium">New</span>
+                <div>
+                  <p className="text-sm text-primary opacity-70 mb-2">Assigned Events</p>
+                  {loadingAssigned ? (
+                    <p className="text-sm text-primary">Loading...</p>
+                  ) : assignedEvents.length === 0 ? (
+                    <p className="text-sm text-primary opacity-60">No events assigned to you</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {assignedEvents.map(ev => (
+                        <div key={ev.id || ev.eventCode} className="p-3 bg-secondary rounded-lg border-2 border-themed flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-primary">{ev.eventTitle || ev.name || ev.eventCode}</div>
+                            <div className="text-xs text-primary opacity-60">Code: {ev.eventCode}</div>
+                          </div>
+                          <div>
+                            <button onClick={() => handleOpenEvaluateForEvent(ev)} className="btn-primary px-3 py-1 rounded-lg border-2">Evaluate</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Judging Statistics */}
-          <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed mb-8">
-            <h3 className="text-lg font-bold text-primary mb-6">Judging Statistics</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="stats-card-blue p-4 rounded-lg border border-themed">
-                <h4 className="font-bold text-primary mb-2">Most Active Category</h4>
-                <p className="text-sm text-primary opacity-70 mb-1">AI & Machine Learning</p>
-                <p className="text-xl font-black text-accent">15 submissions</p>
-              </div>
-              
-              <div className="stats-card-green p-4 rounded-lg border border-themed">
-                <h4 className="font-bold text-secondary mb-2">Highest Rated Project</h4>
-                <p className="text-sm text-secondary opacity-70 mb-1">Smart Health Monitor</p>
-                <p className="text-xl font-black text-secondary">9.5/10</p>
-              </div>
-              
-              <div className="stats-card-purple p-4 rounded-lg border border-themed">
-                <h4 className="font-bold text-primary mb-2">Review Completion</h4>
-                <p className="text-sm text-primary opacity-70 mb-1">This Month</p>
-                <p className="text-xl font-black text-accent">78%</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Evaluations */}
-          <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
-            <h3 className="text-lg font-bold text-primary mb-6">Recent Evaluations</h3>
-            <div className="space-y-4">
-              <div className="recent-eval-item flex items-center justify-between p-4 rounded-lg border">
-                <div>
-                  <h4 className="font-bold text-primary">ML Prediction Model</h4>
-                  <p className="text-sm text-primary opacity-70">Team Delta • AI Innovation Challenge</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-black text-primary">8.7</div>
-                  <div className="text-xs text-primary opacity-60">Scored 2 days ago</div>
-                </div>
-              </div>
-              
-              <div className="recent-eval-item flex items-center justify-between p-4 rounded-lg border">
-                <div>
-                  <h4 className="font-bold text-primary">Decentralized Voting App</h4>
-                  <p className="text-sm text-primary opacity-70">Team Echo • Web3 Hackathon</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-black text-primary">9.1</div>
-                  <div className="text-xs text-primary opacity-60">Scored 3 days ago</div>
-                </div>
-              </div>
-              
-              <div className="recent-eval-item flex items-center justify-between p-4 rounded-lg border">
-                <div>
-                  <h4 className="font-bold text-primary">IoT Home Automation</h4>
-                  <p className="text-sm text-primary opacity-70">Team Foxtrot • IoT Challenge</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-black text-primary">7.9</div>
-                  <div className="text-xs text-primary opacity-60">Scored 1 week ago</div>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Removed static stats and recent evaluations; dashboard now shows only dynamic data for assigned events/submissions. */}
         </main>
       </div>
     </>
