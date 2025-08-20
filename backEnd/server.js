@@ -10,6 +10,8 @@ const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
 const DATA_FILE = path.join(__dirname, 'users.json');
 const EVENTS_FILE = path.join(__dirname, 'events.json');
+const REGISTRATIONS_FILE = path.join(__dirname, 'registrations.json');
+const SUBMISSIONS_FILE = path.join(__dirname, 'submissions.json');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -148,6 +150,40 @@ async function readEvents() {
 
 async function writeEvents(events) {
   await fs.writeFile(EVENTS_FILE, JSON.stringify(events, null, 2));
+}
+
+async function readRegistrations() {
+  try {
+    const raw = await fs.readFile(REGISTRATIONS_FILE, 'utf8');
+    return JSON.parse(raw || '[]');
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      await fs.writeFile(REGISTRATIONS_FILE, '[]');
+      return [];
+    }
+    throw e;
+  }
+}
+
+async function writeRegistrations(items) {
+  await fs.writeFile(REGISTRATIONS_FILE, JSON.stringify(items, null, 2));
+}
+
+async function readSubmissions() {
+  try {
+    const raw = await fs.readFile(SUBMISSIONS_FILE, 'utf8');
+    return JSON.parse(raw || '[]');
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      await fs.writeFile(SUBMISSIONS_FILE, '[]');
+      return [];
+    }
+    throw e;
+  }
+}
+
+async function writeSubmissions(items) {
+  await fs.writeFile(SUBMISSIONS_FILE, JSON.stringify(items, null, 2));
 }
 
 // Fixed mapEventRow function - ensures all fields are properly mapped
@@ -1077,4 +1113,204 @@ app.post('/api/send-judge-emails', async (req, res) => {
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
+});
+
+// Register for event (single registrant or team)
+app.post('/api/events/:id/register', async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const { registrants, registrant } = req.body || {};
+    const regs = Array.isArray(registrants) ? registrants : (registrant ? [registrant] : []);
+    if (!regs || regs.length === 0) return res.status(400).json({ error: 'No registrant data provided' });
+
+    // Build participants array
+    const participants = regs.map(r => ({ name: r.name || null, email: (r.email || '').toLowerCase(), metadata: r.metadata || null }));
+    const primary = participants[0];
+
+    const row = {
+      id: null,
+      event_id: null,
+      event_code: null,
+      team_name: req.body.teamName || null,
+      registrant_email: primary.email || null,
+      registrant_name: primary.name || null,
+      role: req.body.role || null,
+      participants,
+      metadata: { participant_emails: participants.map(p => p.email) },
+      created_at: new Date().toISOString()
+    };
+
+    // Try to resolve event id (UUID) from provided identifier (could be event code)
+    let resolvedEvent = null;
+    if (eventId) {
+      try {
+        resolvedEvent = await findEventByIdOrCode(eventId);
+      } catch (e) {
+        // ignore resolution errors - we'll fallback to storing code
+      }
+    }
+    if (resolvedEvent && resolvedEvent.id) {
+      row.event_id = resolvedEvent.id;
+      row.event_code = resolvedEvent.eventCode || null;
+    } else {
+      // store the raw identifier as event_code if it's not a UUID
+      row.event_code = String(eventId || '').toUpperCase() || null;
+    }
+
+    if (supabaseAdmin) {
+      const payload = {
+        event_id: row.event_id,
+        event_code: row.event_code,
+        team_name: row.team_name,
+        registrant_email: row.registrant_email,
+        registrant_name: row.registrant_name,
+        role: row.role,
+        participants: row.participants,
+        metadata: row.metadata,
+        created_at: row.created_at
+      };
+      const { data, error } = await supabaseInsertWithColumnRetry('registrations', payload);
+      if (error) {
+        console.error('Supabase registration insert error', error);
+        return res.status(500).json({ error: 'Failed to register' });
+      }
+      return res.json(data);
+    }
+
+    // file fallback
+    const items = await readRegistrations();
+    row.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    items.push(row);
+    await writeRegistrations(items);
+    return res.json(row);
+  } catch (err) {
+    console.error('Registration create error', err);
+    return res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// List registrations (filter by eventId or email)
+app.get('/api/registrations', async (req, res) => {
+  try {
+    const { eventId, email } = req.query || {};
+    if (supabaseAdmin) {
+      let query = supabaseAdmin.from('registrations').select('*');
+      if (eventId) {
+        // resolve event id safely
+        const resolved = await findEventByIdOrCode(eventId);
+        if (resolved && resolved.id) {
+          query = query.eq('event_id', resolved.id);
+        } else {
+          // fallback to matching event_code (case-insensitive)
+          query = query.ilike('event_code', `${String(eventId).toUpperCase()}`);
+        }
+      }
+      if (email) query = query.or(`registrant_email.eq.${email},participants.cs.[{"email":"${email.toLowerCase()}"}]`);
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) {
+        console.error('Supabase registrations fetch error', error);
+        return res.status(500).json({ error: 'Failed to fetch registrations' });
+      }
+      return res.json(data || []);
+    }
+
+  const items = await readRegistrations();
+  let results = items;
+  if (eventId) results = results.filter(r => r.event_id === eventId || (r.event_code && String(r.event_code).toUpperCase() === String(eventId).toUpperCase()));
+    if (email) results = results.filter(r => r.registrant_email === email.toLowerCase() || (Array.isArray(r.participants) && r.participants.some(p => p.email === email.toLowerCase())));
+    return res.json(results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+  } catch (err) {
+    console.error('list registrations error', err);
+    return res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// Submissions endpoints (create/list)
+app.post('/api/events/:id/submissions', async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const { teamName, submitterName, submitterEmail, link, files } = req.body || {};
+    if (!teamName || !link) return res.status(400).json({ error: 'teamName and link are required' });
+
+    // resolve event title and id safely
+    let resolvedTitle = null;
+    let resolved = null;
+    if (eventId) {
+      resolved = await findEventByIdOrCode(eventId).catch(() => null);
+    }
+    if (resolved && resolved.eventTitle) resolvedTitle = resolved.eventTitle;
+    if (!resolvedTitle && supabaseAdmin) {
+      try {
+        const { data: ev, error: evErr } = await supabaseAdmin.from('events').select('event_title').eq('id', resolved ? resolved.id : eventId).single();
+        if (!evErr && ev) resolvedTitle = ev.event_title || null;
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const submission = {
+      id: null,
+      event_id: resolved && resolved.id ? resolved.id : null,
+      event_title: resolvedTitle,
+      team_name: teamName,
+      submitter_name: submitterName || null,
+      submitter_email: submitterEmail || null,
+      link: link,
+      files: files || null,
+      metadata: { created_at: new Date().toISOString() }
+    };
+
+    if (supabaseAdmin) {
+      const payload = {
+        event_id: submission.event_id,
+        event_title: submission.event_title,
+        team_name: submission.team_name,
+        submitter_name: submission.submitter_name,
+        submitter_email: submission.submitter_email,
+        link: submission.link,
+        files: submission.files,
+        metadata: submission.metadata
+      };
+      const { data, error } = await supabaseInsertWithColumnRetry('submissions', payload);
+      if (error) {
+        console.error('Supabase submission insert error', error);
+        return res.status(500).json({ error: 'Failed to create submission' });
+      }
+      return res.json(data);
+    }
+
+    const items = await readSubmissions();
+    submission.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    items.push(submission);
+    await writeSubmissions(items);
+    return res.json(submission);
+  } catch (err) {
+    console.error('submission create error', err);
+    return res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+app.get('/api/submissions', async (req, res) => {
+  try {
+    const { eventId, teamName } = req.query || {};
+    if (supabaseAdmin) {
+      let query = supabaseAdmin.from('submissions').select('*');
+      if (eventId) query = query.eq('event_id', eventId);
+      if (teamName) query = query.ilike('team_name', `%${teamName}%`);
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) {
+        console.error('Supabase submissions fetch error', error);
+        return res.status(500).json({ error: 'Failed to fetch submissions' });
+      }
+      return res.json(data || []);
+    }
+    const items = await readSubmissions();
+    let results = items;
+    if (eventId) results = results.filter(r => r.event_id === eventId);
+    if (teamName) results = results.filter(r => r.team_name && r.team_name.toLowerCase().includes(teamName.toLowerCase()));
+    return res.json(results.sort((a, b) => new Date(b.metadata.created_at) - new Date(a.metadata.created_at)));
+  } catch (err) {
+    console.error('list submissions error', err);
+    return res.status(500).json({ error: err.message || String(err) });
+  }
 });
