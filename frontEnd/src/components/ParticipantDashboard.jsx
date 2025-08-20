@@ -6,9 +6,16 @@ import EventRegistrationForm from './EventRegistrationForm.jsx';
 
 const ParticipantDashboard = () => {
   const { user, logout } = useAuth();
+  const avatarStorageKey = `selectedAvatar:${user?.email || user?.id || 'anon'}`; // Unique key for each user
   const [isProfileFormOpen, setProfileFormOpen] = useState(false);
   const [isTeamFormOpen, setTeamFormOpen] = useState(false);
-  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [selectedAvatar, setSelectedAvatar] = useState(() => {
+    try {
+      return localStorage.getItem(avatarStorageKey) || null; // Load avatar from localStorage
+    } catch {
+      return null;
+    }
+  });
   const [participantDetails, setParticipantDetails] = useState({
     name: user.name,
     institute: '',
@@ -262,7 +269,19 @@ const ParticipantDashboard = () => {
 
   const handleAvatarSelect = (avatar) => {
     setSelectedAvatar(avatar);
+    try {
+      localStorage.setItem(avatarStorageKey, avatar); // Save avatar to localStorage
+    } catch {
+      console.warn('Failed to save avatar to localStorage');
+    }
   };
+
+  useEffect(() => {
+    const savedAvatar = localStorage.getItem(avatarStorageKey);
+    if (savedAvatar) {
+      setSelectedAvatar(savedAvatar); // Restore avatar on component mount
+    }
+  }, [avatarStorageKey]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -479,7 +498,7 @@ const ParticipantDashboard = () => {
                 <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center border-2 border-themed shadow-themed">
                   <Trophy className="w-6 h-6 text-secondary" />
                 </div>
-                <h1 className="text-xl font-black text-primary">SynapHack 3.0</h1>
+                <h1 className="text-xl font-black text-primary">Eventure</h1>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
@@ -958,7 +977,7 @@ const ParticipantDashboard = () => {
                   <motion.div
                     key={user.id}
                     className={`flex items-center p-3 rounded-lg border border-themed transition-all ${
-                      index < 3 ? 'bg-secondary scale-105' : 'bg-primary'
+                      index < 5 ? 'bg-secondary scale-105' : 'bg-primary'
                     }`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
