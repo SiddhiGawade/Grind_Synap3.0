@@ -102,10 +102,10 @@ const LandingPage = ({ onNavigate }) => {
   };
 
   const faqData = [
-    { question: "What is HackHub?", answer: "HackHub is a platform designed to help you organize, participate in, and judge hackathons, streamlining the entire event lifecycle." },
-    { question: "Who can participate in hackathons?", answer: "Anyone with a passion for innovation and problem-solving can participate. Whether you're a student, professional, or hobbyist, HackHub welcomes you." },
-    { question: "How do I host a hackathon on HackHub?", answer: "Hosting a hackathon is simple. Sign up as an organizer, create your event, and use our tools to manage participants, teams, and judging seamlessly." },
-    { question: "Is HackHub free to use?", answer: "HackHub offers both free and premium plans. The free plan includes essential features, while premium plans provide advanced tools for organizers and participants." },
+    { question: "What is Eventure?", answer: "Eventure is a platform designed to help you organize, participate in, and judge hackathons, streamlining the entire event lifecycle." },
+    { question: "Who can participate in hackathons?", answer: "Anyone with a passion for innovation and problem-solving can participate. Whether you're a student, professional, or hobbyist, Eventure welcomes you." },
+    { question: "How do I host a hackathon on Eventure?", answer: "Hosting a hackathon is simple. Sign up as an organizer, create your event, and use our tools to manage participants, teams, and judging seamlessly." },
+    { question: "Is Eventure free to use?", answer: "Eventure offers both free and premium plans. The free plan includes essential features, while premium plans provide advanced tools for organizers and participants." },
   ];
 
   return (
@@ -247,9 +247,9 @@ const LandingPage = ({ onNavigate }) => {
         >
           <div className="flex items-center gap-2 font-extrabold text-xl cursor-pointer text-accent">
             <Trophy className="w-6 h-6" />
-            <span>HackHub</span>
+            <span>Eventure</span>
           </div>
-          <nav className="hidden md:flex gap-8 text-sm font-medium">
+          <nav className="hidden md:flex gap-8 text-sm font-medium ml-26">
             <a href="#features" className="text-primary transition-colors hover:opacity-70">Features</a>
             <a href="#about" className="text-primary transition-colors hover:opacity-70">About</a>
             <a href="#contact" className="text-primary transition-colors hover:opacity-70">Contact</a>
@@ -301,7 +301,7 @@ const LandingPage = ({ onNavigate }) => {
               <span className="text-accent">Grow.</span>
             </motion.h1>
             <motion.p variants={heroItemVariants} className="max-w-2xl text-lg opacity-80 mb-8 text-primary">
-              HackHub is your one-stop platform to <b>organize</b>, <b>participate</b>, and <b>judge hackathons</b>. Build meaningful projects, expand your network, and shape the future of tech 🚀
+              Eventure is your one-stop platform to <b>organize</b>, <b>participate</b>, and <b>judge hackathons</b>. Build meaningful projects, expand your network, and shape the future of tech 🚀
             </motion.p>
             <motion.div variants={heroItemVariants} className="flex gap-6 flex-wrap items-center justify-center">
               <motion.button
@@ -375,9 +375,9 @@ const LandingPage = ({ onNavigate }) => {
           whileInView="visible"
           viewport={{ once: true, amount: 0.2 }}
         >
-          <h2 className="text-4xl font-black mb-6 text-secondary">Why HackHub?</h2>
+          <h2 className="text-4xl font-black mb-6 text-secondary">Why Eventure?</h2>
           <p className="max-w-3xl mx-auto text-lg mb-8 opacity-90 text-secondary">
-            Unlike any other platform, HackHub gives you end-to-end hackathon engagement: from organizers setting up challenges, to participants competing globally, and industry leaders acting as mentors & judges. It's more than just an event — it's a movement.
+            Unlike any other platform, Eventure gives you end-to-end hackathon engagement: from organizers setting up challenges, to participants competing globally, and industry leaders acting as mentors & judges. It's more than just an event — it's a movement.
           </p>
           <motion.button
             onClick={() => onNavigate('signup')}
@@ -405,7 +405,7 @@ const LandingPage = ({ onNavigate }) => {
           <h2 className="text-4xl font-black mb-6 text-primary">Ready to Hack the Future?</h2>
           <p className="max-w-3xl mx-auto text-lg opacity-90 mb-10 text-primary">
             Whether you're looking to host a global hackathon with seamless judging tools, 
-            or you're a developer aiming to find your next winning team, HackHub provides 
+            or you're a developer aiming to find your next winning team, Eventure provides 
             the ultimate platform for competitive innovation.
           </p>
           <motion.button
@@ -454,7 +454,7 @@ const LandingPage = ({ onNavigate }) => {
             <div className="flex flex-col items-center md:items-start col-span-1">
               <div className="flex items-center gap-2 font-extrabold text-2xl mb-2 text-accent">
                 <Trophy className="w-7 h-7" />
-                <span>HackHub</span>
+                <span>Eventure</span>
               </div>
               <p className="text-sm opacity-70 text-primary">The Future of Innovation, Verified.</p>
             </div>
@@ -477,7 +477,7 @@ const LandingPage = ({ onNavigate }) => {
             </div>
           </div>
           <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-opacity-20 flex justify-center items-center">
-            <p className="text-sm opacity-60 text-primary">© {new Date().getFullYear()} HackHub. All rights reserved.</p>
+            <p className="text-sm opacity-60 text-primary">© {new Date().getFullYear()} Eventure. All rights reserved.</p>
           </div>
         </motion.footer>
       </div>
