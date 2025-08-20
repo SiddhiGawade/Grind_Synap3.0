@@ -15,6 +15,16 @@ const CreatorDashboard = () => {
   const [announcementInputs, setAnnouncementInputs] = useState({});
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [selectedEventForLeaderboard, setSelectedEventForLeaderboard] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewEvent, setReviewEvent] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [eventSubmissions, setEventSubmissions] = useState([]);
+  const [eventReviews, setEventReviews] = useState([]);
+  const [registrations, setRegistrations] = useState([]);
+  const [allSubmissions, setAllSubmissions] = useState([]);
+  const [allReviews, setAllReviews] = useState([]);
+  const [participantCount, setParticipantCount] = useState(0);
+  const [totalReviewsCount, setTotalReviewsCount] = useState(0);
 
   const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
@@ -97,6 +107,84 @@ const CreatorDashboard = () => {
     root.classList.remove('dark-theme');
     fetchEvents();
   }, []);
+
+  // Load global metrics: registrations, submissions, reviews
+  useEffect(() => {
+    let mounted = true;
+    const loadMetrics = async () => {
+      try {
+        const base = API_BASE.replace(/\/$/, '');
+        const [regsRes, subsRes, revRes] = await Promise.all([
+          fetch(`${base}/api/registrations`),
+          fetch(`${base}/api/submissions`),
+          fetch(`${base}/api/reviews`)
+        ]);
+
+        const regs = regsRes.ok ? await regsRes.json() : [];
+        const subs = subsRes.ok ? await subsRes.json() : [];
+        const revs = revRes.ok ? await revRes.json() : [];
+
+        if (!mounted) return;
+        setRegistrations(Array.isArray(regs) ? regs : []);
+        setAllSubmissions(Array.isArray(subs) ? subs : []);
+        setAllReviews(Array.isArray(revs) ? revs : []);
+
+        // Compute participant count: prefer event.participants sums; fallback to unique registrant emails
+        let participantsFromEvents = 0;
+        try {
+          participantsFromEvents = events.reduce((sum, ev) => {
+            const p = Array.isArray(ev.participants) ? ev.participants.length : 0;
+            return sum + p;
+          }, 0);
+        } catch (e) { participantsFromEvents = 0; }
+
+        if (participantsFromEvents > 0) {
+          setParticipantCount(participantsFromEvents);
+        } else {
+          // derive unique emails from registrations
+          const emails = new Set();
+          (Array.isArray(regs) ? regs : []).forEach(r => {
+            const e = r.registrantEmail || r.registrant_email || r.email || r.email_address || r.emailAddress;
+            if (e) emails.add(String(e).toLowerCase());
+          });
+          setParticipantCount(emails.size);
+        }
+
+        // Total submissions as number of reviews (judges' reviews)
+        setTotalReviewsCount(Array.isArray(revs) ? revs.length : 0);
+      } catch (err) {
+        console.warn('Failed to load metrics', err);
+      }
+    };
+    loadMetrics();
+    return () => { mounted = false; };
+  }, [events, API_BASE]);
+
+  // Fetch submissions and reviews for organizer to view review results
+  const handleOpenReviewResults = async (ev) => {
+    setReviewEvent(ev);
+    setShowReviewModal(true);
+    setReviewLoading(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+      // fetch submissions for this event
+      const evId = ev.id || ev.eventCode || ev.event_code;
+      const subsRes = await fetch(`${API_BASE.replace(/\/$/, '')}/api/submissions?eventId=${encodeURIComponent(evId)}`);
+      const subs = subsRes.ok ? await subsRes.json() : [];
+      setEventSubmissions(Array.isArray(subs) ? subs : []);
+
+      // fetch all reviews for these submissions (server can filter by submissionId; we'll request all and filter)
+      const reviewsRes = await fetch(`${API_BASE.replace(/\/$/, '')}/api/reviews`);
+      const reviews = reviewsRes.ok ? await reviewsRes.json() : [];
+      setEventReviews(Array.isArray(reviews) ? reviews : []);
+    } catch (err) {
+      console.error('Failed to load review results', err);
+      setEventSubmissions([]);
+      setEventReviews([]);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
 
   return (
     <>
@@ -291,7 +379,7 @@ const CreatorDashboard = () => {
                             <span className="text-xs text-primary opacity-60">Code: {ev.eventCode || ev.event_code}</span>
                             <div className="flex items-center gap-2">
                               <button onClick={() => { setEditingEvent(ev); setShowWizard(true); }} className="btn-primary px-3 py-1.5 rounded-lg border-2 text-xs font-medium cursor-pointer">Edit</button>
-                              <button onClick={() => { setSelectedEventForLeaderboard(ev); setShowLeaderboard(true); }} className="btn-primary text-white px-3 py-1.5 rounded-lg border-2 text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1 cursor-pointer">
+                              <button onClick={() => handleOpenReviewResults(ev)} className="btn-primary text-white px-3 py-1.5 rounded-lg border-2 text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1 cursor-pointer">
                                 <Eye className="w-3 h-3" />
                                 Review Result
                               </button>
@@ -375,6 +463,61 @@ const CreatorDashboard = () => {
           />
         )}
 
+        {/* Organizer: Review Results modal */}
+        {showReviewModal && reviewEvent && (
+          <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-4xl max-h-[80vh] overflow-y-auto rounded-xl border-2 border-themed shadow-themed-xl p-6 bg-primary">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-primary">Review Results — {reviewEvent.eventTitle || reviewEvent.title || reviewEvent.name}</h3>
+                <button onClick={() => { setShowReviewModal(false); setReviewEvent(null); setEventSubmissions([]); setEventReviews([]); }} className="btn-secondary px-3 py-1 rounded">Close</button>
+              </div>
+
+              {reviewLoading ? (
+                <p className="text-primary">Loading reviews...</p>
+              ) : (
+                <div className="space-y-4">
+                  {eventSubmissions.length === 0 ? (
+                    <div className="text-primary opacity-60">No submissions for this event.</div>
+                  ) : (
+                    eventSubmissions.map(sub => {
+                      const reviewsForSub = (eventReviews || []).filter(r => String(r.submission_id) === String(sub.id));
+                      // team emails: some submissions may include registrants or teamMembers, try common fields
+                      const teamEmails = sub.registrants || sub.teamMembers || sub.team_members || sub.members || [];
+                      const teamEmailsList = Array.isArray(teamEmails) && teamEmails.length > 0 ? teamEmails.map(m => m.email || m).join(', ') : (sub.submitter_email || sub.submitterEmail || 'Unknown');
+
+                      return (
+                        <div key={sub.id || Math.random()} className="p-4 bg-secondary rounded-lg border border-themed">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <div className="font-semibold text-primary">{sub.teamName || sub.team_name || sub.project_name || sub.project_name || sub.team || 'Team'}</div>
+                              <div className="text-xs text-primary opacity-70">Emails: {teamEmailsList}</div>
+                            </div>
+                            <div className="text-sm text-primary opacity-60">Submitted: {new Date(sub.created_at || sub.createdAt || sub.submitted_at || Date.now()).toLocaleString()}</div>
+                          </div>
+
+                          {reviewsForSub.length === 0 ? (
+                            <div className="text-sm text-primary opacity-60">No reviews yet</div>
+                          ) : (
+                            <div className="space-y-2">
+                              {reviewsForSub.map(r => (
+                                <div key={r.id || r.created_at || Math.random()} className="p-3 bg-primary/5 rounded">
+                                  <div className="text-sm font-medium text-primary">Score: {r.score || r.score === 0 ? r.score : '—'}</div>
+                                  <div className="text-xs text-primary opacity-60">By: {r.reviewer_name || r.reviewer_email || 'Judge'}</div>
+                                  <div className="text-sm text-primary mt-1">{r.feedback}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Manage events modal */}
         {manageOpen && (
           <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -427,7 +570,7 @@ const CreatorDashboard = () => {
                             >
                               Edit
                             </button>
-                            <button onClick={() => { setSelectedEventForLeaderboard(ev); setShowLeaderboard(true); }} className="bg-blue-500 text-white px-3 py-1 rounded border-2 text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1">
+                            <button onClick={() => handleOpenReviewResults(ev)} className="bg-blue-500 text-white px-3 py-1 rounded border-2 text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1">
                               <Eye className="w-3 h-3" />
                               Review Result
                             </button>
