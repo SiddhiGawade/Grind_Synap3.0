@@ -52,6 +52,20 @@ const ParticipantDashboard = () => {
     { id: 5, user: user.name, avatar: selectedAvatar || '/avatars/Avatar-5.png', message: 'Thanks for the advice! Looking forward to participating.', time: 'Just now', isQuestion: false }
   ]);
 
+  const [leaderboardData] = useState([
+    // Sample leaderboard data
+    { id: 1, rank: 1, name: 'Alex Johnson', avatar: '/avatars/Avatar-1.jpg', xp: 2850 },
+    { id: 2, rank: 2, name: 'Sarah Kim', avatar: '/avatars/Avatar-2.jpg', xp: 2720 },
+    { id: 3, rank: 3, name: 'Mike Chen', avatar: '/avatars/Avatar-3.png', xp: 2650 },
+    { id: 4, rank: 4, name: 'Emma Davis', avatar: '/avatars/Avatar-4.png', xp: 2580 },
+    { id: 5, rank: 5, name: 'Jordan Lee', avatar: '/avatars/Avatar-5.png', xp: 2450 },
+    { id: 6, rank: 6, name: 'Taylor Smith', avatar: '/avatars/Avatar-6.png', xp: 2380 },
+    { id: 7, rank: 7, name: 'Ryan Martinez', avatar: '/avatars/Avatar-7.png', xp: 2250 },
+    { id: 8, rank: 8, name: 'Lisa Thompson', avatar: '/avatars/Avatar-8.png', xp: 2180 },
+    { id: 9, rank: 9, name: 'David Wilson', avatar: '/avatars/Avatar-9.png', xp: 2100 },
+    { id: 10, rank: 10, name: user.name, avatar: selectedAvatar || '/avatars/Avatar-10.png', xp: stats.xpPoints }
+  ]);
+
   // Persist registered events per-user in localStorage so registrations survive page reloads
   const storageKey = `registeredEvents:${user?.email || user?.id || 'anon'}`;
   const [registeredEvents, setRegisteredEvents] = useState(() => {
@@ -1074,9 +1088,9 @@ const ParticipantDashboard = () => {
                 <button onClick={() => setRegistrationFormOpen(true)} className="btn-primary px-4 py-2 rounded-lg w-full">Register for an Event</button>
                 <button onClick={() => setProjectModalOpen(true)} className="btn-secondary px-4 py-2 rounded-lg w-full">Submit Project</button>
                 <button onClick={() => setProfileFormOpen(true)} className="btn-secondary px-4 py-2 rounded-lg w-full">Edit Profile</button>
-=======
-          {/* QnA Discussion & Leaderboard */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              </div>
+            </div>
+
             {/* QnA Discussion Chat */}
             <motion.div
               className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
@@ -1163,11 +1177,12 @@ const ParticipantDashboard = () => {
                 💡 Static demo - Full chat functionality coming soon!
               </p>
             </motion.div>
+          </div>
 
-            {/* Leaderboard */}
-            <motion.div
-              className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
-              initial={{ opacity: 0, x: 20 }}
+          {/* Leaderboard */}
+          <motion.div
+            className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
+            initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.6 }}
             >
@@ -1200,8 +1215,7 @@ const ParticipantDashboard = () => {
                 ))}
 
               </div>
-            </div>
-          </div>
+            </motion.div>
 
           {/* Certificates Section */}
           <motion.div
