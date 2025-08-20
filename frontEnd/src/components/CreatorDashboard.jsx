@@ -255,75 +255,57 @@ const CreatorDashboard = () => {
               {/* Recent Events */}
               <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
                 <h3 className="text-lg font-bold text-primary mb-4">Recent Events</h3>
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {loadingEvents && <p className="text-sm text-primary opacity-70">Loading events...</p>}
                   {eventsError && <p className="text-sm text-red-600">{eventsError}</p>}
                   {!loadingEvents && events.length === 0 && <p className="text-sm text-primary opacity-70">No events yet. Create one to get started.</p>}
                   {!loadingEvents && events.slice().reverse().slice(0,5).map((ev) => {
-                    const start = ev.startDate ? new Date(ev.startDate) : null;
-                    const end = ev.endDate ? new Date(ev.endDate) : null;
+                    const start = ev.startDate ? new Date(ev.startDate) : (ev.start_date ? new Date(ev.start_date) : null);
+                    const end = ev.endDate ? new Date(ev.endDate) : (ev.end_date ? new Date(ev.end_date) : null);
                     const now = new Date();
-                    let status = 'Upcoming';
-                    if (start && end) {
-                      if (now < start) status = 'Upcoming';
-                      else if (now >= start && now <= end) status = 'Active';
-                      else status = 'Completed';
-                    }
+                    const status = start && end ? (now < start ? 'Upcoming' : now > end ? 'Ended' : 'Active') : 'Active';
                     const participants = Array.isArray(ev.participants) ? ev.participants.length : 0;
                     const submissions = Array.isArray(ev.submissions) ? ev.submissions.length : 0;
-                      return (
-                        <div key={ev.id} className="rounded-lg border-2 border-themed overflow-hidden bg-primary">
-                          <div className="w-full h-28 bg-gray-100 overflow-hidden">
-                            <img src={ev.image_url || ev.imageUrl || ''} alt={ev.eventTitle || '(Event image)'} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+                    return (
+                      <div key={ev.id || ev.eventCode || ev.event_code} className={`rounded-lg border-2 border-themed overflow-hidden ${status === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}>
+                        <div className="w-full h-40 bg-gray-100 overflow-hidden">
+                          <img src={ev.image_url || ev.imageUrl || ''} alt={ev.eventTitle || ev.title || 'Event image'} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+                        </div>
+
+                        <div className="p-4">
+                          <h4 className="font-bold text-primary">{ev.eventTitle || ev.title || ev.name || 'Untitled Event'}</h4>
+                          {ev.eventDescription && <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>}
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-xs px-2 py-1 rounded-full ${status === 'Ended' ? 'bg-gray-200 text-gray-800' : status === 'Upcoming' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'}`}>{status}</span>
+                            <span className="text-xs text-primary opacity-60">{start ? start.toLocaleDateString() : 'TBA'}</span>
                           </div>
-                          <div className="p-4">
-                            <h4 className="font-bold text-primary">{ev.eventTitle || '(Untitled Event)'}</h4>
-                            <p className="text-sm text-primary opacity-70">{participants} participants • {submissions} submissions</p>
-                            
-                            <div className="mt-3">
-  <div className="text-sm font-medium mb-2 text-primary">Recent Announcements</div>
-  {(ev.announcements || []).slice(-3).reverse().map((raw, index) => {
-    const a = normalizeAnnouncement(raw);
-    
-    // Debug log to see what we're getting
-    console.log('Raw announcement:', raw);
-    console.log('Normalized announcement:', a);
-    
-    return (
-      <div key={a.id || index} className="bg-white/20 backdrop-blur-sm border border-primary/20 rounded-lg p-3 mb-2 shadow-sm">
-        <div className="flex items-start gap-2">
-          <div className="w-2 h-2 bg-accent rounded-full mt-2 flex-shrink-0"></div>
-          <div className="flex-1">
-            <p className="text-primary font-medium leading-relaxed">
-              {a.text || 'No announcement text'}
-            </p>
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-primary/60 font-medium">
-                {formatDateSafe(a.createdAt)}
-              </span>
-              {a.author && (
-                <span className="text-xs text-primary/50 italic">
-                  by {a.author}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  })}
-  {(!ev.announcements || ev.announcements.length === 0) && (
-    <div className="text-xs text-primary opacity-50 italic text-center py-2">
-      No announcements yet
-    </div>
-  )}
-</div>
-                            
-                            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${status === 'Active' ? 'bg-green-200 text-green-800' : status === 'Upcoming' ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-800'}`}>{status}</span>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-primary opacity-60">Code: {ev.eventCode || ev.event_code}</span>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => { setEditingEvent(ev); setShowWizard(true); }} className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium">Edit</button>
+                              <button onClick={async () => { if (!confirm('Delete this event?')) return; try { const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'; const res = await fetch(`${API_BASE}/api/events/${ev.id}`, { method: 'DELETE' }); if (!res.ok) throw new Error('Delete failed'); await fetchEvents(); } catch (err) { alert(err.message || 'Delete failed'); } }} className="btn-delete px-3 py-1 rounded">Delete</button>
+                            </div>
+                          </div>
+
+                          {/* Announcements preview */}
+                          <div className="mt-3">
+                            {(ev.announcements || []).slice(-3).reverse().map((raw, idx) => {
+                              const a = normalizeAnnouncement(raw);
+                              return (
+                                <div key={a.id || idx} className="announcement-item text-sm text-primary p-2 rounded mb-2">
+                                  <div className="font-medium">{a.text}</div>
+                                  <div className="text-xs text-primary opacity-60">{formatDateSafe(a.createdAt) || ''}</div>
+                                </div>
+                              );
+                            })}
+                            {(!ev.announcements || ev.announcements.length === 0) && (
+                              <div className="text-xs text-primary opacity-50 italic text-center py-2">No announcements yet</div>
+                            )}
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
                 
@@ -379,122 +361,131 @@ const CreatorDashboard = () => {
                 <h3 className="text-lg font-bold text-primary">Manage Events</h3>
                 <button onClick={() => setManageOpen(false)} className="btn-secondary px-3 py-1 border rounded">Close</button>
               </div>
-              <div className="space-y-4">
-                {events.length === 0 && <p className="text-sm text-primary opacity-70">No events to manage</p>}
-                {events.map((ev) => (
-                  <div key={ev.id} className="p-4 rounded border border-themed bg-secondary">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <div className="font-semibold text-primary">{ev.eventTitle || '(Untitled)'}</div>
-                        <div className="text-sm text-primary opacity-70">{ev.name} • {ev.email}</div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {events.length === 0 && (
+                  <p className="text-sm text-primary opacity-70">No events to manage</p>
+                )}
+
+                {events.map((ev) => {
+                  const start = ev.startDate ? new Date(ev.startDate) : (ev.start_date ? new Date(ev.start_date) : null);
+                  const end = ev.endDate ? new Date(ev.endDate) : (ev.end_date ? new Date(ev.end_date) : null);
+                  const now = new Date();
+                  const status = start && end ? (now < start ? 'Upcoming' : now > end ? 'Ended' : 'Active') : 'Active';
+
+                  return (
+                    <div
+                      key={ev.id || ev.eventCode || ev.event_code}
+                      className={`rounded-lg border-2 border-themed overflow-hidden ${status === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}
+                    >
+                      <div className="w-full h-40 bg-gray-100 overflow-hidden">
+                        <img
+                          src={ev.image_url || ev.imageUrl || ''}
+                          alt={ev.eventTitle || ev.title || 'Event image'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setEditingEvent(ev); setShowWizard(true); setManageOpen(false); }} className="btn-primary px-3 py-1 rounded">Edit</button>
-                        
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4">
-                      <div className="text-sm font-medium mb-3 text-primary">Announcements</div>
-                      
-                      {/* Enhanced Announcements Display */}
-                      <div className="space-y-3">
-                        {(ev.announcements || []).map((raw, index) => {
-                          const a = normalizeAnnouncement(raw);
-                          return (
-                            <div key={a.id || index} className="announcement-item border-l-4 border-accent bg-white/30 backdrop-blur-sm rounded-r-lg p-3 shadow-sm">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1">
-                                  <div className="bg-white/50 rounded-lg p-2 mb-2">
-                                    <p className="text-primary font-medium leading-relaxed">{a.text}</p>
-                                  </div>
-                                  <div className="flex items-center gap-4 text-xs">
-                                    <span className="flex items-center gap-1 text-primary/70">
-                                      <Calendar className="w-3 h-3" />
-                                      {formatDateSafe(a.createdAt)}
-                                    </span>
-                                    {a.author && (
-                                      <span className="flex items-center gap-1 text-primary/60">
-                                        <Users className="w-3 h-3" />
-                                        {a.author}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {(!ev.announcements || ev.announcements.length === 0) && (
-                          <div className="text-center py-8">
-                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                              <FileText className="w-6 h-6 text-primary/40" />
-                            </div>
-                            <p className="text-sm text-primary/50">No announcements yet</p>
-                            <p className="text-xs text-primary/40">Create your first announcement below</p>
+
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <div className="font-semibold text-primary">{ev.eventTitle || '(Untitled)'}</div>
+                            <div className="text-sm text-primary opacity-70">{ev.name} • {ev.email}</div>
                           </div>
-                        )}
-                      </div>
-                      
-                      {/* Enhanced Announcement Input */}
-                      <div className="mt-4 bg-white/20 backdrop-blur-sm rounded-lg p-4 border border-primary/20">
-                        <div className="text-sm font-medium mb-3 text-primary flex items-center gap-2">
-                          <Plus className="w-4 h-4" />
-                          Add New Announcement
-                        </div>
-                        <div className="space-y-3">
-                          <textarea
-                            placeholder="Share updates, important information, or reminders with participants..."
-                            value={announcementInputs[ev.id] || ''}
-                            onChange={(e) => setAnnouncementInputs(prev => ({ ...prev, [ev.id]: e.target.value }))}
-                            className="input-field w-full border-2 p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent announcement-input"
-                            rows="3"
-                          />
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs text-primary/60">
-                              {(announcementInputs[ev.id] || '').length}/500 characters
-                            </div>
+                          <div className="flex items-center gap-2">
                             <button
-                              onClick={async () => {
-                                const text = (announcementInputs[ev.id] || '').trim();
-                                if (!text) return alert('Please enter announcement text');
-                                if (text.length > 500) return alert('Announcement too long (max 500 characters)');
-                                
-                                try {
-                                  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
-                                  const res = await fetch(`${API_BASE}/api/events/${ev.id}/announcements`, { 
-                                    method: 'POST', 
-                                    headers: { 'Content-Type': 'application/json' }, 
-                                    body: JSON.stringify({ text, author: user.name }) 
-                                  });
-                                  if (!res.ok) {
-                                    const errText = await res.text().catch(() => 'Failed to post announcement');
-                                    throw new Error(errText || 'Failed to post announcement');
-                                  }
-                                  // Clear input and refresh events
-                                  setAnnouncementInputs(prev => ({ ...prev, [ev.id]: '' }));
-                                  await fetchEvents();
-                                } catch (err) {
-                                  alert(err.message || 'Failed to post announcement');
-                                }
-                              }}
-                              disabled={!(announcementInputs[ev.id] || '').trim()}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                                (announcementInputs[ev.id] || '').trim() 
-                                  ? 'btn-primary shadow-themed hover:shadow-themed-lg' 
-                                  : 'bg-primary/20 text-primary/40 cursor-not-allowed'
-                              }`}
+                              onClick={() => { setEditingEvent(ev); setShowWizard(true); setManageOpen(false); }}
+                              className="btn-primary px-3 py-1 rounded"
                             >
-                              <Send className="w-4 h-4" />
-                              Post Announcement
+                              Edit
                             </button>
                           </div>
                         </div>
+
+                        <div className="mt-2">
+                          <div className="text-sm font-medium mb-3 text-primary">Announcements</div>
+
+                          <div className="space-y-3">
+                            {(ev.announcements || []).map((raw, index) => {
+                              const a = normalizeAnnouncement(raw);
+                              return (
+                                <div key={a.id || index} className="announcement-item border-l-4 border-accent bg-white/30 backdrop-blur-sm rounded-r-lg p-3 shadow-sm">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1">
+                                      <div className="bg-white/50 rounded-lg p-2 mb-2">
+                                        <p className="text-primary font-medium leading-relaxed">{a.text}</p>
+                                      </div>
+                                      <div className="flex items-center gap-4 text-xs">
+                                        <span className="flex items-center gap-1 text-primary/70">
+                                          <Calendar className="w-3 h-3" />
+                                          {formatDateSafe(a.createdAt)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {(!ev.announcements || ev.announcements.length === 0) && (
+                              <div className="text-center py-8">
+                                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                                  <FileText className="w-6 h-6 text-primary/40" />
+                                </div>
+                                <p className="text-sm text-primary/50">No announcements yet</p>
+                                <p className="text-xs text-primary/40">Create your first announcement below</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Announcement input unchanged */}
+                          <div className="mt-4 bg-white/20 backdrop-blur-sm rounded-lg p-4 border border-primary/20">
+                            <div className="text-sm font-medium mb-3 text-primary flex items-center gap-2">
+                              <Plus className="w-4 h-4" />
+                              Add New Announcement
+                            </div>
+
+                            <div className="space-y-3">
+                              <textarea
+                                placeholder="Share updates, important information, or reminders with participants..."
+                                value={announcementInputs[ev.id] || ''}
+                                onChange={(e) => setAnnouncementInputs(prev => ({ ...prev, [ev.id]: e.target.value }))}
+                                className="input-field w-full border-2 p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent announcement-input"
+                                rows="3"
+                              />
+
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs text-primary/60">{(announcementInputs[ev.id] || '').length}/500 characters</div>
+                                <button
+                                  onClick={async () => {
+                                    const text = (announcementInputs[ev.id] || '').trim();
+                                    if (!text) return alert('Please enter announcement text');
+                                    if (text.length > 500) return alert('Announcement too long (max 500 characters)');
+                                    try {
+                                      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+                                      const res = await fetch(`${API_BASE}/api/events/${ev.id}/announcements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, author: user.name }) });
+                                      if (!res.ok) { const errText = await res.text().catch(() => 'Failed to post announcement'); throw new Error(errText || 'Failed to post announcement'); }
+                                      setAnnouncementInputs(prev => ({ ...prev, [ev.id]: '' }));
+                                      await fetchEvents();
+                                    } catch (err) {
+                                      alert(err.message || 'Failed to post announcement');
+                                    }
+                                  }}
+                                  disabled={!(announcementInputs[ev.id] || '').trim()}
+                                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${ (announcementInputs[ev.id] || '').trim() ? 'btn-primary shadow-themed hover:shadow-themed-lg' : 'bg-primary/20 text-primary/40 cursor-not-allowed' }`}
+                                >
+                                  <Send className="w-4 h-4" />
+                                  Post Announcement
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
