@@ -113,7 +113,7 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (validateStep(step)) {
+    if (step === 4 && validateStep(step)) { // Ensure submission only happens after step 4
       onSubmit(formData);
     }
   };
@@ -381,15 +381,15 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
   );
 
   const renderStepContent = () => {
-    switch(step) {
+    switch (step) {
       case 1:
         return renderPersonalDetailsStep();
       case 2:
-        return event.teamEvent ? renderTeamDetailsStep() : renderAdditionalInfoStep();
+        return renderTeamDetailsStep(); // Always show team details in step 2
       case 3:
-        return event.teamEvent ? renderAdditionalInfoStep() : renderReviewStep();
+        return renderAdditionalInfoStep(); // Ensure additional info is only shown in step 3
       case 4:
-        return renderReviewStep();
+        return renderReviewStep(); // Review step remains in step 4
       default:
         return null;
     }
