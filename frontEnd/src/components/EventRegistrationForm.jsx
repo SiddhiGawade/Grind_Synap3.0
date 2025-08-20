@@ -121,17 +121,14 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
   const renderStepIndicator = () => {
     const steps = [
       { number: 1, label: 'Personal Details' },
-      { number: 2, label: event.teamEvent ? 'Team Details' : 'Additional Info' },
+      { number: 2, label: 'Team Details' }, // Always include step 2
       { number: 3, label: 'Additional Info' },
       { number: 4, label: 'Review & Submit' }
     ];
 
-    // If not a team event, remove the team details step
-    const filteredSteps = event.teamEvent ? steps : steps.filter(s => s.number !== 2);
-
     return (
       <div className="flex justify-between mb-6">
-        {filteredSteps.map((s, index) => (
+        {steps.map((s, index) => (
           <div key={s.number} className="flex items-center">
             <div 
               className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= s.number ? 'bg-accent text-white' : 'bg-secondary/50 text-primary/50'} border-2 border-themed`}
@@ -141,7 +138,7 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
             <span className={`ml-2 text-sm hidden sm:inline ${step >= s.number ? 'text-primary' : 'text-primary/50'}`}>
               {s.label}
             </span>
-            {index < filteredSteps.length - 1 && (
+            {index < steps.length - 1 && (
               <div className={`w-10 sm:w-16 h-0.5 mx-1 ${step > s.number ? 'bg-accent' : 'bg-secondary/50'}`}></div>
             )}
           </div>
