@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Award, Share2, X, Clock, MapPin, Users as UsersIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -7,7 +6,6 @@ import EventRegistrationForm from './EventRegistrationForm.jsx';
 
 const ParticipantDashboard = () => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [isProfileFormOpen, setProfileFormOpen] = useState(false);
   const [isTeamFormOpen, setTeamFormOpen] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
@@ -24,16 +22,29 @@ const ParticipantDashboard = () => {
 
   // Placeholder for dynamic data
   const [stats, setStats] = useState({
-    
+    xpPoints: 0,
+    hackathonsJoined: 0,
+    certificatesEarned: 0,
+    teamMembers: 0
   });
 
   const [leaderboardData, setLeaderboardData] = useState([
-    
+    // Sample leaderboard data
+    { id: 1, name: 'Alex Johnson', avatar: '/avatars/Avatar-1.jpg', xp: 1250, rank: 1 },
+    { id: 2, name: 'Sam Wilson', avatar: '/avatars/Avatar-2.jpg', xp: 980, rank: 2 },
+    { id: 3, name: 'Jordan Lee', avatar: '/avatars/Avatar-3.png', xp: 875, rank: 3 },
+    { id: 4, name: 'Taylor Smith', avatar: '/avatars/Avatar-4.png', xp: 760, rank: 4 },
+    { id: 5, name: user.name, avatar: selectedAvatar || '/avatars/Avatar-5.png', xp: 650, rank: 5 }
   ]);
 
   const [certificates, setCertificates] = useState([
-    
+    // Sample certificates data
+    { id: 1, name: 'Hackathon 2023 - Participant', date: '2023-11-15' },
+    { id: 2, name: 'Web Development Bootcamp', date: '2023-09-22' }
   ]);
+  
+  // State to track registered events
+  const [registeredEvents, setRegisteredEvents] = useState([]);
 
   const avatars = [
     '/avatars/Avatar-1.jpg',
@@ -54,14 +65,21 @@ const ParticipantDashboard = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isEventModalOpen, setEventModalOpen] = useState(false);
   const [isRegistrationFormOpen, setRegistrationFormOpen] = useState(false);
-  
+  const [isProjectModalOpen, setProjectModalOpen] = useState(false);
+  const [projectForm, setProjectForm] = useState({
+    eventName: '',
+    teamName: '',
+    githubLink: '',
+    projectDescription: ''
+  });
+
   // Helper function to determine if an event is a team event
   const isTeamEvent = (event) => {
     return event.eventType === 'hackathon' || 
            (event.minTeamSize && event.minTeamSize > 1) || 
            (event.maxTeamSize && event.maxTeamSize > 1);
   };
-  
+
   // Format date to readable string
   const formatDate = (dateString) => {
     if (!dateString) return 'Not specified';
@@ -74,7 +92,7 @@ const ParticipantDashboard = () => {
     };
     return new Date(dateString).toLocaleString(undefined, options);
   };
-  
+
   // Format event type for display
   const formatEventType = (type) => {
     if (!type) return 'General Event';
@@ -83,7 +101,7 @@ const ParticipantDashboard = () => {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
   };
-  
+
   // Render tags from comma-separated string
   const renderTags = (tags) => {
     if (!tags) return null;
@@ -186,6 +204,46 @@ const ParticipantDashboard = () => {
     setErrors((prevErrors) => ({ ...prevErrors, [name]: '' }));
   };
 
+  // Handle event registration
+  const handleEventRegistration = (eventData, teamInfo = null) => {
+    // Check if already registered
+    const isAlreadyRegistered = registeredEvents.some(
+      event => event.id === eventData.id || 
+              event.eventTitle === (eventData.eventTitle || eventData.title)
+    );
+
+    if (isAlreadyRegistered) {
+      alert('You are already registered for this event!');
+      setRegistrationFormOpen(false);
+      setEventModalOpen(false);
+      return;
+    }
+
+    const newRegisteredEvent = {
+      id: eventData.id || eventData.eventCode || `event-${Date.now()}`,
+      eventTitle: eventData.eventTitle || eventData.title || 'Untitled Event',
+      startDate: eventData.startDate || eventData.start_date || new Date().toISOString(),
+      endDate: eventData.endDate || eventData.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      registrationDate: new Date().toISOString(),
+      teamInfo: teamInfo || null,
+      status: new Date() < new Date(eventData.startDate || eventData.start_date || new Date()) ? 'Upcoming' : 'Active'
+    };
+    
+    setRegisteredEvents(prev => [...prev, newRegisteredEvent]);
+    
+    // Update stats
+    setStats(prev => ({
+      ...prev,
+      hackathonsJoined: prev.hackathonsJoined + 1
+    }));
+    
+    setRegistrationFormOpen(false);
+    setEventModalOpen(false);
+    
+    // Show success message
+    alert(`Successfully registered for ${newRegisteredEvent.eventTitle}!`);
+  };
+
   const handleSaveProfile = (e) => {
     e.preventDefault();
     const newErrors = {};
@@ -203,6 +261,29 @@ const ParticipantDashboard = () => {
     setProfileFormOpen(false);
   };
 
+  const handleProjectInputChange = (e) => {
+    const { name, value } = e.target;
+    setProjectForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleProjectSubmit = (e) => {
+    e.preventDefault();
+    // Here you would typically send the project details to your backend
+    console.log('Project submitted:', projectForm);
+    alert('Project submitted successfully!');
+    setProjectModalOpen(false);
+    // Reset form
+    setProjectForm({
+      eventName: projectForm.eventName, // Keep the event name
+      teamName: '',
+      githubLink: '',
+      projectDescription: ''
+    });
+  };
+
   useEffect(() => {
     const root = document.documentElement;
     root.classList.add('light-theme');
@@ -211,7 +292,7 @@ const ParticipantDashboard = () => {
 
   return (
     <>
-  <style>{`
+      <style>{`
         :root {
           /* Light Theme Colors Only */
           --bg-primary: #F2EDD1;
@@ -246,7 +327,7 @@ const ParticipantDashboard = () => {
         .animate-slide-down { animation: slideDown 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  `}</style>
+      `}</style>
 
       <div className="min-h-screen bg-primary font-sans">
         {/* Header */}
@@ -504,7 +585,10 @@ const ParticipantDashboard = () => {
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-3 pt-4">
                       <button
-                        onClick={() => navigate('/event', { state: selectedEvent })}
+                        onClick={() => {
+                          setEventModalOpen(false);
+                          setRegistrationFormOpen(true);
+                        }}
                         className="btn-primary px-6 py-3 rounded-lg border-2 font-medium flex-1 flex items-center justify-center gap-2 text-lg"
                       >
                         <Plus className="w-6 h-6" />
@@ -618,13 +702,67 @@ const ParticipantDashboard = () => {
             </motion.div>
           </div>
 
-          {/* Current Events */}
+          {/* Registered Events */}
           <motion.div
             className="dashboard-card-white p-6 rounded-2xl border-2 border-themed mb-8"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.8 }}
           >
+            <h3 className="text-lg font-bold text-primary mb-6">Your Registered Events</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+              {registeredEvents.length === 0 ? (
+                <div className="col-span-full text-center py-6">
+                  <p className="text-primary opacity-60">You haven't registered for any events yet.</p>
+                  <p className="text-sm text-primary opacity-50 mt-2">Browse events below to get started!</p>
+                </div>
+              ) : (
+                registeredEvents.map((event) => {
+                  const eventDate = new Date(event.startDate);
+                  const today = new Date();
+                  const isUpcoming = today < eventDate;
+                  const isActive = today >= new Date(event.startDate) && today <= new Date(event.endDate);
+                  const status = isUpcoming ? 'Upcoming' : isActive ? 'Active' : 'Ended';
+                  const statusColor = isUpcoming ? 'bg-blue-200 text-blue-800' : 
+                                     isActive ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-800';
+                  
+                  return (
+                    <div key={event.id} className="p-4 bg-secondary rounded-lg border-2 border-themed">
+                      <h4 className="font-bold text-primary">{event.eventTitle}</h4>
+                      {event.teamInfo && (
+                        <p className="text-sm text-primary opacity-70 mb-2">
+                          {event.teamInfo.teamName ? `Team: ${event.teamInfo.teamName}` : 'Individual Registration'}
+                        </p>
+                      )}
+                      <p className="text-xs text-primary opacity-70 mb-3">
+                        {new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()}
+                      </p>
+                      <div className="flex justify-between items-center">
+                        <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
+                          {status}
+                        </span>
+                        {isActive && (
+                          <button 
+                            onClick={() => {
+                              setProjectForm(prev => ({
+                                ...prev,
+                                eventName: event.eventTitle,
+                                teamName: event.teamInfo?.teamName || ''
+                              }));
+                              setProjectModalOpen(true);
+                            }}
+                            className="btn-primary px-3 py-1 text-xs rounded-lg border-2 font-medium"
+                          >
+                            Submit Project
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
             <h3 className="text-lg font-bold text-primary mb-6">Current Events</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {eventsLoading ? (
@@ -633,44 +771,72 @@ const ParticipantDashboard = () => {
                 <div className="col-span-3 text-primary opacity-60">No active events yet.</div>
               ) : (
                 events.map((ev) => {
-                  const startDate = ev.startDate ? new Date(ev.startDate) : null;
-                  const endDate = ev.endDate ? new Date(ev.endDate) : null;
+                  // Calculate event status based on dates
                   const today = new Date();
-                  const status = startDate && endDate ? (today < startDate ? 'Upcoming' : today > endDate ? 'Ended' : 'Active') : 'Active';
-
+                  const startDate = new Date(ev.startDate);
+                  const endDate = new Date(ev.endDate);
+                  
+                  let eventStatus = 'Active';
+                  let statusColor = 'bg-green-200 text-green-800';
+                  let timeInfo = '';
+                  
+                  if (today < startDate) {
+                    eventStatus = 'Upcoming';
+                    statusColor = 'bg-blue-200 text-blue-800';
+                    const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
+                    timeInfo = `Starts in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
+                  } else if (today > endDate) {
+                    eventStatus = 'Ended';
+                    statusColor = 'bg-gray-200 text-gray-800';
+                    timeInfo = 'Event ended';
+                  } else {
+                    eventStatus = 'Active';
+                    statusColor = 'bg-green-200 text-green-800';
+                    const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                    timeInfo = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
+                  }
+                  
                   return (
-                    <div key={ev.id || ev.eventCode || ev.event_code} className={`rounded-lg border-2 border-themed overflow-hidden ${status === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}>
-                      <div className="w-full h-40 bg-gray-100 overflow-hidden">
-                        <img
-                          src={ev.image_url || ev.imageUrl || getEventField(ev, 'image_url', 'imageUrl') || ''}
-                          alt={ev.eventTitle || ev.title || 'Event image'}
-                          className="w-full h-full object-cover"
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
+                    <div
+                      key={ev.id || ev.eventCode || ev.event_code}
+                      className={`p-4 rounded-lg border-2 border-themed ${eventStatus === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}
+                    >
+                      <h4 className="font-bold text-primary">
+                        {ev.eventTitle || ev.title || ev.name || 'Untitled Event'}
+                      </h4>
+                      {ev.eventDescription && (
+                        <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>
+                      )}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
+                          {eventStatus}
+                        </span>
+                        <span className="text-xs text-primary opacity-60">{timeInfo}</span>
                       </div>
-
-                      <div className="p-4">
-                        <h4 className="font-bold text-primary">{ev.eventTitle || ev.title || ev.name || 'Untitled Event'}</h4>
-                        {ev.eventDescription && <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>}
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`text-xs px-2 py-1 rounded-full ${status === 'Ended' ? 'bg-gray-200 text-gray-800' : status === 'Upcoming' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'}`}>
-                            {status}
-                          </span>
-                          <span className="text-xs text-primary opacity-60">{startDate ? startDate.toLocaleDateString() : 'TBA'}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-primary opacity-60">Code: {ev.eventCode || ev.event_code}</span>
-                          <button
-                            className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
-                            disabled={status === 'Ended'}
-                            onClick={() => { setSelectedEvent({ ...ev, teamEvent: isTeamEvent(ev) }); setEventModalOpen(true); }}
-                          >
-                            {status === 'Ended' ? 'Ended' : 'Register'}
-                          </button>
-                        </div>
+                      <div className="text-xs text-primary opacity-50 mb-3">
+                        {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-primary opacity-60">
+                          Code: {ev.eventCode || ev.event_code}
+                        </span>
+                        <button
+                          className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
+                          disabled={eventStatus === 'Ended'}
+                          onClick={() => {
+                            const eventWithTeamInfo = {
+                              ...ev,
+                              teamEvent: isTeamEvent(ev)
+                            };
+                            setSelectedEvent(eventWithTeamInfo);
+                            setEventModalOpen(true);
+                          }}
+                        >
+                          {eventStatus === 'Ended' ? 'Ended' : 'Register'}
+                        </button>
                       </div>
                     </div>
-                  );
+                  )
                 })
               )}
             </div>
@@ -679,31 +845,7 @@ const ParticipantDashboard = () => {
           {/* Quick Actions & Leaderboard */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Quick Actions */}
-            <motion.div
-              className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-            >
-              <h3 className="text-lg font-bold text-primary mb-4">Quick Actions</h3>
-              <div className="space-y-3">
-                <button className="btn-primary w-full p-3 rounded-lg border-2 font-medium flex items-center gap-2">
-                  <Plus className="w-5 h-5" />
-                  Join New Event
-                </button>
-                <button
-                  onClick={handleCreateTeamClick}
-                  className="btn-secondary w-full p-3 rounded-lg border-2 font-medium flex items-center gap-2"
-                >
-                  <Users className="w-5 h-5" />
-                  Form a Team
-                </button>
-                <button className="btn-secondary w-full p-3 rounded-lg border-2 font-medium flex items-center gap-2">
-                  <Edit className="w-5 h-5" />
-                  Submit Project
-                </button>
-              </div>
-            </motion.div>
+ 
             {/* Leaderboard */}
             <motion.div
               className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
@@ -897,18 +1039,103 @@ const ParticipantDashboard = () => {
               </motion.div>
             </motion.div>
           )}
-        {isRegistrationFormOpen && selectedEvent && (
-          <EventRegistrationForm 
-            event={selectedEvent}
-            onClose={() => setRegistrationFormOpen(false)}
-            onSubmit={(formData) => {
-              console.log('Registration form submitted:', formData);
-              // Here you would typically send the data to your backend
-              alert(`Successfully registered for: ${selectedEvent.eventTitle}`);
-              setRegistrationFormOpen(false);
-            }}
-          />
-        )}
+          {isRegistrationFormOpen && selectedEvent && (
+            <EventRegistrationForm 
+              event={selectedEvent}
+              onClose={() => setRegistrationFormOpen(false)}
+              onSubmit={(formData) => {
+                // Handle form submission and add to registered events
+                handleEventRegistration(selectedEvent, formData.teamName ? { teamName: formData.teamName } : null);
+                console.log('Registration form submitted:', formData);
+                // Here you would typically send the data to your backend
+                alert(`Successfully registered for: ${selectedEvent.eventTitle}`);
+                setRegistrationFormOpen(false);
+              }}
+            />
+          )}
+          {isProjectModalOpen && (
+            <motion.div
+              className="modal-overlay fixed inset-0 flex items-center justify-center z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="modal-content p-6 rounded-2xl shadow-lg w-full max-w-2xl border-2 border-themed relative"
+                initial={{ scale: 0.9, y: 50 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 50 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+              >
+                <h2 className="text-xl font-bold text-primary mb-4">Submit Your Project</h2>
+                <form onSubmit={handleProjectSubmit}>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-primary mb-1">Event Name</label>
+                      <input
+                        type="text"
+                        name="eventName"
+                        value={projectForm.eventName}
+                        onChange={handleProjectInputChange}
+                        className="input-field w-full p-2 border-2 rounded-lg bg-secondary font-medium"
+                        readOnly
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-primary mb-1">Team Name</label>
+                      <input
+                        type="text"
+                        name="teamName"
+                        value={projectForm.teamName}
+                        onChange={handleProjectInputChange}
+                        className="input-field w-full p-2 border-2 rounded-lg"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-primary mb-1">GitHub Repository Link</label>
+                      <input
+                        type="url"
+                        name="githubLink"
+                        value={projectForm.githubLink}
+                        onChange={handleProjectInputChange}
+                        className="input-field w-full p-2 border-2 rounded-lg"
+                        placeholder="https://github.com/username/repository"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-primary mb-1">Project Name</label>
+                      <input
+                        type="text"
+                        name="projectName"
+                        value={projectForm.projectName}
+                        onChange={handleProjectInputChange}
+                        className="input-field w-full p-2 border-2 rounded-lg h-10"
+                        placeholder="Write your project name"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 mt-6">
+                    <button 
+                      type="button" 
+                      onClick={() => setProjectModalOpen(false)}
+                      className="btn-secondary px-4 py-2 rounded-lg border-2"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="btn-primary px-4 py-2 rounded-lg border-2"
+                    >
+                      Submit Project
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </>
