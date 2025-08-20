@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "name": "grind-synap-frontend",
+  "builds": [
+    {
+      "src": "frontEnd/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "frontEnd/dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/frontEnd/$1"
+    }
+  ],
+  "buildCommand": "cd frontEnd && npm run build",
+  "outputDirectory": "frontEnd/dist",
+  "installCommand": "cd frontEnd && npm install"
+}
