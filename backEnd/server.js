@@ -19,7 +19,26 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const app = express();
 // Allow CORS from the frontend base configured in the backend .env (fallback to localhost:5173)
 const FRONTEND_BASE = process.env.FRONTEND_BASE || 'http://localhost:5173';
-app.use(cors({ origin: FRONTEND_BASE }));
+// Accept multiple comma-separated frontend origins in FRONTEND_BASE (e.g.
+// "http://localhost:5173,https://my-frontend.vercel.app"). Normalize by
+// trimming and removing any trailing slash.
+const FRONTEND_BASES = FRONTEND_BASE
+  .split(',')
+  .map(s => s.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, cb) {
+    // Allow requests with no origin (curl, server-to-server)
+    if (!origin) return cb(null, true);
+    const normalized = origin.replace(/\/$/, '');
+    // Allow configured frontend origins
+    if (FRONTEND_BASES.includes(normalized)) return cb(null, true);
+    // Allow localhost origins for development (any port)
+    if (/^http:\/\/localhost(:\d+)?$/.test(normalized)) return cb(null, true);
+    return cb(new Error('CORS not allowed by server'), false);
+  }
+}));
 app.use(express.json({ limit: '15mb' }));
 
 // Serve uploaded files
