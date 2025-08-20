@@ -115,6 +115,9 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
     e.preventDefault();
     if (step === 4 && validateStep(step)) { // Ensure submission only happens after step 4
       onSubmit(formData);
+      // Show success message
+      alert(`Registration successful for the event: ${event.eventTitle}\n\nThank you for registering! You will receive a confirmation email shortly.`);
+      onClose(); // Close the form after successful submission
     }
   };
 
@@ -207,62 +210,60 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
   const renderTeamDetailsStep = () => (
     <div className="space-y-4">
       <h3 className="text-lg font-bold text-primary">Team Details</h3>
-      <div className="max-h-[60vh] overflow-y-auto pr-2">
-        <div className="grid grid-cols-1 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-primary mb-1">Team Name*</label>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-primary mb-1">Team Name*</label>
+          <input 
+            type="text" 
+            name="teamName" 
+            value={formData.teamName} 
+            onChange={handleInputChange} 
+            className={`input-field w-full p-2 border-2 rounded-lg focus:ring-2 focus:ring-accent focus:outline-none ${errors.teamName ? 'border-red-500' : 'border-themed'}`}
+            placeholder="Enter your team name"
+          />
+          {errors.teamName && <p className="text-red-500 text-xs mt-1">{errors.teamName}</p>}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-primary mb-1">Team Size*</label>
+          <div className="flex items-center">
             <input 
-              type="text" 
-              name="teamName" 
-              value={formData.teamName} 
+              type="number" 
+              name="teamSize" 
+              value={formData.teamSize} 
               onChange={handleInputChange} 
-              className={`input-field w-full p-2 border-2 rounded-lg focus:ring-2 focus:ring-accent focus:outline-none ${errors.teamName ? 'border-red-500' : 'border-themed'}`}
-              placeholder="Enter your team name"
+              min="1"
+              max={Math.min(event.maxTeamSize || 10, 4)}
+              className={`input-field w-full p-2 border-2 rounded-lg focus:ring-2 focus:ring-accent focus:outline-none ${errors.teamSize ? 'border-red-500' : 'border-themed'}`}
             />
-            {errors.teamName && <p className="text-red-500 text-xs mt-1">{errors.teamName}</p>}
+            {event.minTeamSize && event.maxTeamSize && (
+              <span className="ml-2 text-xs text-primary/70">
+                ({event.minTeamSize}-{Math.min(event.maxTeamSize, 4)} members)
+              </span>
+            )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-primary mb-1">Team Size*</label>
-            <div className="flex items-center">
-              <input 
-                type="number" 
-                name="teamSize" 
-                value={formData.teamSize} 
-                onChange={handleInputChange} 
-                min="1"
-                max={Math.min(event.maxTeamSize || 10, 4)}
-                className={`input-field w-full p-2 border-2 rounded-lg focus:ring-2 focus:ring-accent focus:outline-none ${errors.teamSize ? 'border-red-500' : 'border-themed'}`}
-              />
-              {event.minTeamSize && event.maxTeamSize && (
-                <span className="ml-2 text-xs text-primary/70">
-                  ({event.minTeamSize}-{Math.min(event.maxTeamSize, 4)} members)
-                </span>
-              )}
-            </div>
-            {errors.teamSize && <p className="text-red-500 text-xs mt-1">{errors.teamSize}</p>}
-          </div>
+          {errors.teamSize && <p className="text-red-500 text-xs mt-1">{errors.teamSize}</p>}
+        </div>
+        
+        <div className="mt-4">
+          <h4 className="text-md font-medium text-primary mb-2">Invite Team Members</h4>
+          <p className="text-sm text-primary/70 mb-4">
+            <Info className="inline-block w-4 h-4 mr-1" />
+            Invite up to 3 team members by email (maximum team size: 4 including you)
+          </p>
           
-          <div className="mt-4">
-            <h4 className="text-md font-medium text-primary mb-2">Invite Team Members</h4>
-            <p className="text-sm text-primary/70 mb-4">
-              <Info className="inline-block w-4 h-4 mr-1" />
-              Invite up to 3 team members by email (maximum team size: 4 including you)
-            </p>
-            
-            {formData.inviteEmails.map((email, index) => (
-              <div key={index} className="mb-3">
-                <label className="block text-sm font-medium text-primary mb-1">Team Member {index + 1} Email</label>
-                <input 
-                  type="email" 
-                  value={email} 
-                  onChange={(e) => handleInviteEmailChange(index, e.target.value)} 
-                  className={`input-field w-full p-2 border-2 rounded-lg focus:ring-2 focus:ring-accent focus:outline-none ${errors[`inviteEmail${index}`] ? 'border-red-500' : 'border-themed'}`}
-                  placeholder="Enter team member's email address"
-                />
-                {errors[`inviteEmail${index}`] && <p className="text-red-500 text-xs mt-1">{errors[`inviteEmail${index}`]}</p>}
-              </div>
-            ))}
-          </div>
+          {formData.inviteEmails.map((email, index) => (
+            <div key={index} className="mb-3">
+              <label className="block text-sm font-medium text-primary mb-1">Team Member {index + 1} Email</label>
+              <input 
+                type="email" 
+                value={email} 
+                onChange={(e) => handleInviteEmailChange(index, e.target.value)} 
+                className={`input-field w-full p-2 border-2 rounded-lg focus:ring-2 focus:ring-accent focus:outline-none ${errors[`inviteEmail${index}`] ? 'border-red-500' : 'border-themed'}`}
+                placeholder="Enter team member's email address"
+              />
+              {errors[`inviteEmail${index}`] && <p className="text-red-500 text-xs mt-1">{errors[`inviteEmail${index}`]}</p>}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -464,13 +465,13 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
               </button>
             )}
             
-            {step < maxStep ? (
+            {step < 4 ? (
               <button 
                 type="button" 
                 onClick={handleNext}
                 className="btn-primary px-4 py-2 rounded-lg border-2 flex items-center gap-1"
               >
-                Next
+                {step === 3 ? 'Next' : 'Next'}
                 <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
