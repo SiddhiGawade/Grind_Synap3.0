@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import SignupPage from './components/SignupPage';
 import SigninPage from './components/SigninPage';
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import ParticipantDashboard from './components/ParticipantDashboard';
 import CreatorDashboard from './components/CreatorDashboard';
 import JudgeDashboard from './components/JudgeDashboard';
 import LandingPage from './components/LandingPage';
+import EventDescription from './components/EventDescription';
 
 // Main App Component
 const App = () => {
@@ -46,10 +48,13 @@ const App = () => {
   const renderPage = () => {
     if (user && currentPage === 'dashboard') {
       switch (user.role) {
-        case 'landing':
-          return <LandingPage onNavigate={handleNavigation} />;
         case 'participant':
-          return <ParticipantDashboard />;
+          return (
+            <Routes>
+              <Route path="/" element={<ParticipantDashboard onNavigate={handleNavigation} />} />
+              <Route path="/event" element={<EventDescription />} />
+            </Routes>
+          );
         case 'organizer':
           return <CreatorDashboard />;
         case 'judge':
@@ -81,9 +86,11 @@ const App = () => {
 // Root Component with Auth Provider
 const Root = () => {
   return (
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <Router>
+      <AuthProvider>
+        <App /> 
+      </AuthProvider>
+    </Router>
   );
 };
 
