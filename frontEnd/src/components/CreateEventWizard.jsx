@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Confetti from "react-confetti";
 import { motion, AnimatePresence } from 'framer-motion';
+import { Upload, X, Image, Copy, Share2, CheckCircle, ExternalLink } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 
 // 4-step wizard: Host -> Event -> Mentors -> Confirmation
@@ -75,9 +76,14 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
   const [createdEvent, setCreatedEvent] = useState(null);
-  const [showCelebration, setShowCelebration] = useState(false);
+  // const [showCelebration, setShowCelebration] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [approvalLetterFile, setApprovalLetterFile] = useState(null);
+  const [approvalLetterPreview, setApprovalLetterPreview] = useState(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isApprovalDragOver, setIsApprovalDragOver] = useState(false);
+  const [copySuccess, setCopySuccess] = useState('');
 
   // Supabase storage client (optional)
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -344,6 +350,7 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       }
 
       // Create/update event
+      console.log('Sending request:', { url, method, payload });
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -351,10 +358,12 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       });
       
       const data = await res.json().catch(() => ({}));
+      console.log('Response:', { status: res.status, data });
       setLoading(false);
       
       if (!res.ok) {
-        return setError(data.error || 'Failed to create event');
+        console.error('Request failed:', { status: res.status, error: data.error });
+        return setError(data.error || (isEdit ? 'Failed to update event' : 'Failed to create event'));
       }
       
       const createdEventData = data.event || null;
@@ -368,19 +377,19 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
             ...form,
             ...createdEventData
           });
-          setSuccess('Event created successfully and notification emails sent to judges!');
+          setSuccess(isEdit ? 'Event updated successfully and notification emails sent to judges!' : 'Event created successfully and notification emails sent to judges!');
         } catch (emailError) {
           console.error('Email sending failed:', emailError);
           setSuccess('Event created successfully but failed to send notification emails to judges');
           setError('Failed to send emails to judges: ' + (emailError.message || 'Unknown error'));
         }
       } else {
-        setSuccess(data.message || 'Event created successfully');
+        setSuccess(data.message || (isEdit ? 'Event updated successfully' : 'Event created successfully'));
       }
 
       // Show celebration animation
-      setShowCelebration(true);
-      setTimeout(() => setShowCelebration(false), 5000);
+      // setShowCelebration(true);
+      // setTimeout(() => setShowCelebration(false), 5000);
       
       if (onCreated) {
         try { onCreated(createdEventData); } catch (e) {}
@@ -432,27 +441,7 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
       `}</style>
 
       <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-6 overflow-auto">
-        {showCelebration && (
-          <>
-            <Confetti
-              width={windowSize.width}
-              height={windowSize.height}
-              recycle={false}
-              numberOfPieces={500}
-              colors={['#689B8A', '#F9CB99', '#F2EDD1', '#280A3E']}
-            />
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0 }}
-              className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
-            >
-              <div className="text-4xl font-bold text-white text-center p-8">
-                🎉 Hurray! Event Created! 🎉
-              </div>
-            </motion.div>
-          </>
-        )}
+        {/* Celebration animation removed */}
         <div className="modal-content w-full max-w-4xl rounded-2xl border-2 shadow-themed-xl">
           <div className="p-6 border-b-2 border-themed">
             <div className="flex items-center justify-between">
@@ -581,31 +570,280 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                       rows={4} 
                     />
                   </div>
-                  {/* Image upload for event card */}
+                  {/* Enhanced Image upload for event card */}
                   <div>
-                    <label className="block text-sm font-medium text-primary">Event Image (optional)</label>
-                    <div className="mt-1 flex items-center gap-3">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const f = e.target.files && e.target.files[0];
-                          if (f) {
+                    <label className="block text-sm font-medium text-primary mb-3">Event Image (optional)</label>
+                    
+                    {!imagePreview ? (
+                      <div
+                        className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 cursor-pointer ${
+                          isDragOver 
+                            ? 'border-accent bg-accent/10 border-solid' 
+                            : 'border-themed hover:border-accent hover:bg-accent/5'
+                        }`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDragOver(true);
+                        }}
+                        onDragLeave={(e) => {
+                          e.preventDefault();
+                          setIsDragOver(false);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDragOver(false);
+                          const files = e.dataTransfer.files;
+                          if (files && files[0] && files[0].type.startsWith('image/')) {
+                            const f = files[0];
                             setImageFile(f);
                             try { setImagePreview(URL.createObjectURL(f)); } catch(e) {}
-                          } else {
-                            setImageFile(null);
-                            setImagePreview(null);
                           }
                         }}
-                        className="input-field"
-                      />
-                      {imagePreview && (
-                        <img src={imagePreview} alt="preview" className="w-24 h-16 object-cover rounded border" />
-                      )}
-                    </div>
-                    <div className="text-xs text-primary opacity-60 mt-2">Upload an image that represents the event. Max recommended size: 2MB.</div>
+                        onClick={() => document.getElementById('image-upload').click()}
+                      >
+                        <input
+                          id="image-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const f = e.target.files && e.target.files[0];
+                            if (f) {
+                              setImageFile(f);
+                              try { setImagePreview(URL.createObjectURL(f)); } catch(e) {}
+                            } else {
+                              setImageFile(null);
+                              setImagePreview(null);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                        
+                        <div className="flex flex-col items-center gap-4">
+                          <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
+                            isDragOver ? 'bg-accent text-secondary' : 'bg-secondary border-2 border-themed'
+                          }`}>
+                            <Upload className="w-8 h-8" />
+                          </div>
+                          
+                          <div>
+                            <p className="text-lg font-semibold text-primary mb-1">
+                              {isDragOver ? 'Drop your image here' : 'Drop files here, or click below!'}
+                            </p>
+                            <p className="text-sm text-primary opacity-60 mb-3">
+                              Upload an image that represents the event
+                            </p>
+                            
+                            <button
+                              type="button"
+                              className="btn-primary px-6 py-2 rounded-lg border-2 font-medium inline-flex items-center gap-2 hover:shadow-themed transition-all"
+                            >
+                              <Upload className="w-4 h-4" />
+                              Choose File
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 text-xs text-primary opacity-50">
+                          Supported formats: JPG, PNG, GIF • Max size: 2MB
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="bg-secondary border-2 border-themed rounded-xl p-4">
+                          <div className="flex items-start gap-4">
+                            <img 
+                              src={imagePreview} 
+                              alt="Event preview" 
+                              className="w-32 h-24 object-cover rounded-lg border-2 border-themed shadow-themed"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Image className="w-5 h-5 text-accent" />
+                                <span className="font-medium text-primary">
+                                  {imageFile?.name || 'Event Image'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-primary opacity-60 mb-3">
+                                {imageFile?.size ? `${(imageFile.size / 1024 / 1024).toFixed(2)} MB` : 'Image uploaded'}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => document.getElementById('image-upload').click()}
+                                className="btn-secondary px-4 py-1 rounded border-2 text-sm font-medium hover:bg-secondary transition-colors"
+                              >
+                                Change Image
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImageFile(null);
+                                setImagePreview(null);
+                              }}
+                              className="p-1 rounded-full hover:bg-red-100 transition-colors"
+                              title="Remove image"
+                            >
+                              <X className="w-5 h-5 text-red-500" />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <input
+                          id="image-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const f = e.target.files && e.target.files[0];
+                            if (f) {
+                              setImageFile(f);
+                              try { setImagePreview(URL.createObjectURL(f)); } catch(e) {}
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </div>
+                    )}
                   </div>
+                  
+                  {/* Event Approval Letter upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-primary mb-3">Event Approval Letter</label>
+                    
+                    {!approvalLetterPreview ? (
+                      <div
+                        className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 cursor-pointer ${
+                          isApprovalDragOver 
+                            ? 'border-accent bg-accent/10 border-solid' 
+                            : 'border-themed hover:border-accent hover:bg-accent/5'
+                        }`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsApprovalDragOver(true);
+                        }}
+                        onDragLeave={(e) => {
+                          e.preventDefault();
+                          setIsApprovalDragOver(false);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsApprovalDragOver(false);
+                          const files = e.dataTransfer.files;
+                          if (files && files[0] && files[0].type.startsWith('image/')) {
+                            const f = files[0];
+                            setApprovalLetterFile(f);
+                            try { setApprovalLetterPreview(URL.createObjectURL(f)); } catch(e) {}
+                          }
+                        }}
+                        onClick={() => document.getElementById('approval-letter-upload').click()}
+                      >
+                        <input
+                          id="approval-letter-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const f = e.target.files && e.target.files[0];
+                            if (f) {
+                              setApprovalLetterFile(f);
+                              try { setApprovalLetterPreview(URL.createObjectURL(f)); } catch(e) {}
+                            } else {
+                              setApprovalLetterFile(null);
+                              setApprovalLetterPreview(null);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                        
+                        <div className="flex flex-col items-center gap-4">
+                          <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
+                            isApprovalDragOver ? 'bg-accent text-secondary' : 'bg-secondary border-2 border-themed'
+                          }`}>
+                            <Upload className="w-8 h-8" />
+                          </div>
+                          
+                          <div>
+                            <p className="text-lg font-semibold text-primary mb-1">
+                              {isApprovalDragOver ? 'Drop your approval letter here' : 'Drop approval letter here, or click below!'}
+                            </p>
+                            <p className="text-sm text-primary opacity-60 mb-3">
+                              Upload the official approval letter for this event
+                            </p>
+                            
+                            <button
+                              type="button"
+                              className="btn-primary px-6 py-2 rounded-lg border-2 font-medium inline-flex items-center gap-2 hover:shadow-themed transition-all"
+                            >
+                              <Upload className="w-4 h-4" />
+                              Choose File
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 text-xs text-primary opacity-50">
+                          Supported formats: JPG, PNG, PDF • Max size: 5MB
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="bg-secondary border-2 border-themed rounded-xl p-4">
+                          <div className="flex items-start gap-4">
+                            <img 
+                              src={approvalLetterPreview} 
+                              alt="Approval letter preview" 
+                              className="w-32 h-24 object-cover rounded-lg border-2 border-themed shadow-themed"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Image className="w-5 h-5 text-accent" />
+                                <span className="font-medium text-primary">
+                                  {approvalLetterFile?.name || 'Approval Letter'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-primary opacity-60 mb-3">
+                                {approvalLetterFile?.size ? `${(approvalLetterFile.size / 1024 / 1024).toFixed(2)} MB` : 'Document uploaded'}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => document.getElementById('approval-letter-upload').click()}
+                                className="btn-secondary px-4 py-1 rounded border-2 text-sm font-medium hover:bg-secondary transition-colors"
+                              >
+                                Change Document
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setApprovalLetterFile(null);
+                                setApprovalLetterPreview(null);
+                              }}
+                              className="p-1 rounded-full hover:bg-red-100 transition-colors"
+                              title="Remove approval letter"
+                            >
+                              <X className="w-5 h-5 text-red-500" />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <input
+                          id="approval-letter-upload"
+                          type="file"
+                          accept="image/*,application/pdf"
+                          onChange={(e) => {
+                            const f = e.target.files && e.target.files[0];
+                            if (f) {
+                              setApprovalLetterFile(f);
+                              if (f.type.startsWith('image/')) {
+                                try { setApprovalLetterPreview(URL.createObjectURL(f)); } catch(e) {}
+                              } else {
+                                setApprovalLetterPreview('/api/placeholder/document-preview');
+                              }
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-primary">Start date</label>
@@ -1034,17 +1272,185 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
             )}
 
             {step === 3 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold text-primary">Confirmation</h3>
-                <div className="space-y-2 text-primary">
-                  <p><strong>Host:</strong> {form.name} • {form.email}</p>
-                  <p><strong>Organization:</strong> {form.organization} • {form.designation}</p>
-                  <hr className="border-themed" />
-                  <p><strong>Type:</strong> {form.eventType === 'hackathon' ? 'Hackathon' : 'Event'}</p>
-                  <p><strong>Title:</strong> {form.eventTitle}</p>
-                  <p><strong>Description:</strong> {form.eventDescription}</p>
-                  <p><strong>Dates:</strong> {form.startDate || '—'} to {form.endDate || '—'}</p>
-                  <p><strong>Mentors:</strong> {form.numberOfMentors || 0}</p>
+              <div className="space-y-6">
+                {createdEvent ? (
+                  <div className="text-center">
+                    {/* Success Animation */}
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 200, damping: 10 }}
+                      className="mb-6"
+                    >
+                      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-green-500">
+                        <CheckCircle className="w-12 h-12 text-green-500" />
+                      </div>
+                    </motion.div>
+
+                    {/* Congratulations Message */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="mb-8"
+                    >
+                      <h2 className="text-3xl font-black text-primary mb-2">🎉 Congratulations! 🎉</h2>
+                      <p className="text-xl text-primary mb-4">Your event has been successfully created!</p>
+                      <div className="bg-secondary border-2 border-themed rounded-xl p-4 mb-6">
+                        <h3 className="text-lg font-bold text-primary mb-2">{form.eventTitle}</h3>
+                        <p className="text-sm text-primary opacity-70">{form.eventDescription}</p>
+                      </div>
+                    </motion.div>
+
+                    {/* Event Code Section */}
+                    {createdEvent?.eventCode && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.5 }}
+                        className="bg-accent/10 border-2 border-accent rounded-xl p-6 mb-6"
+                      >
+                        <div className="flex items-center justify-center gap-2 mb-3">
+                          <Share2 className="w-5 h-5 text-accent" />
+                          <h4 className="text-lg font-bold text-primary">Event Code</h4>
+                        </div>
+                        <div className="bg-white border-2 border-themed rounded-lg p-4 mb-4">
+                          <div className="text-3xl font-black text-primary text-center mb-2">
+                            {createdEvent.eventCode}
+                          </div>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard?.writeText(createdEvent.eventCode);
+                                setCopySuccess('Event code copied!');
+                                setTimeout(() => setCopySuccess(''), 2000);
+                              }}
+                              className="btn-primary px-4 py-2 rounded-lg border-2 font-medium inline-flex items-center gap-2 hover:shadow-themed transition-all"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Copy Code
+                            </button>
+                          </div>
+                          {copySuccess && (
+                            <div className="text-sm text-green-600 text-center mt-2">{copySuccess}</div>
+                          )}
+                        </div>
+                        <p className="text-sm text-primary opacity-70 text-center">
+                          Share this code with judges so they can access this event
+                        </p>
+                      </motion.div>
+                    )}
+
+                    {/* Shareable Link Section */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.7 }}
+                      className="bg-secondary border-2 border-themed rounded-xl p-6 mb-6"
+                    >
+                      <div className="flex items-center justify-center gap-2 mb-3">
+                        <ExternalLink className="w-5 h-5 text-accent" />
+                        <h4 className="text-lg font-bold text-primary">Shareable Link</h4>
+                      </div>
+                      <div className="bg-white border-2 border-themed rounded-lg p-4 mb-4">
+                        <div className="text-sm text-primary mb-2 break-all">
+                          {`${window.location.origin}/event/${createdEvent?.eventCode || 'EVENT_CODE'}`}
+                        </div>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => {
+                              const shareLink = `${window.location.origin}/event/${createdEvent?.eventCode || 'EVENT_CODE'}`;
+                              navigator.clipboard?.writeText(shareLink);
+                              setCopySuccess('Link copied!');
+                              setTimeout(() => setCopySuccess(''), 2000);
+                            }}
+                            className="btn-secondary px-4 py-2 rounded-lg border-2 font-medium inline-flex items-center gap-2 hover:bg-secondary transition-all"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Copy Link
+                          </button>
+                          <button
+                            onClick={() => {
+                              const shareLink = `${window.location.origin}/event/${createdEvent?.eventCode || 'EVENT_CODE'}`;
+                              if (navigator.share) {
+                                navigator.share({
+                                  title: form.eventTitle,
+                                  text: `Join my event: ${form.eventTitle}`,
+                                  url: shareLink,
+                                });
+                              } else {
+                                // Fallback for browsers that don't support Web Share API
+                                window.open(`https://wa.me/?text=${encodeURIComponent(`Join my event: ${form.eventTitle} - ${shareLink}`)}`, '_blank');
+                              }
+                            }}
+                            className="bg-green-500 text-white px-4 py-2 rounded-lg border-2 border-green-600 font-medium inline-flex items-center gap-2 hover:bg-green-600 transition-all"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            Share
+                          </button>
+                        </div>
+                        {copySuccess && (
+                          <div className="text-sm text-green-600 text-center mt-2">{copySuccess}</div>
+                        )}
+                      </div>
+                      <p className="text-sm text-primary opacity-70 text-center">
+                        Anyone with this link can view and register for your event
+                      </p>
+                    </motion.div>
+
+                    {/* Event Details Summary */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.9 }}
+                      className="bg-primary border-2 border-themed rounded-xl p-6 text-left"
+                    >
+                      <h4 className="text-lg font-bold text-primary mb-4 text-center">Event Summary</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p><strong>Host:</strong> {form.name}</p>
+                          <p><strong>Email:</strong> {form.email}</p>
+                          <p><strong>Organization:</strong> {form.organization || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p><strong>Type:</strong> {form.eventType === 'hackathon' ? 'Hackathon' : 'Event'}</p>
+                          <p><strong>Dates:</strong> {form.startDate || '—'} to {form.endDate || '—'}</p>
+                          <p><strong>Mentors:</strong> {form.numberOfMentors || 0}</p>
+                        </div>
+                      </div>
+                      {form.selectedJudges?.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-themed">
+                          <p className="font-medium mb-2">Authorized Judges ({form.selectedJudges.length}):</p>
+                          <div className="text-xs space-y-1">
+                            {form.selectedJudges.slice(0, 3).map(email => {
+                              const judge = availableJudges.find(j => j.email === email);
+                              return (
+                                <div key={email} className="flex justify-between">
+                                  <span>{judge?.name || 'Unknown'}</span>
+                                  <span className="opacity-60">{email}</span>
+                                </div>
+                              );
+                            })}
+                            {form.selectedJudges.length > 3 && (
+                              <div className="text-center opacity-60">+{form.selectedJudges.length - 3} more</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 className="text-lg font-bold text-primary mb-4">Review Your Event Details</h3>
+                    <div className="space-y-2 text-primary text-sm">
+                      <p><strong>Host:</strong> {form.name} • {form.email}</p>
+                      <p><strong>Organization:</strong> {form.organization} • {form.designation}</p>
+                      <hr className="border-themed" />
+                      <p><strong>Type:</strong> {form.eventType === 'hackathon' ? 'Hackathon' : 'Event'}</p>
+                      <p><strong>Title:</strong> {form.eventTitle}</p>
+                      <p><strong>Description:</strong> {form.eventDescription}</p>
+                      <p><strong>Dates:</strong> {form.startDate || '—'} to {form.endDate || '—'}</p>
+                      <p><strong>Mentors:</strong> {form.numberOfMentors || 0}</p>
                   
                   {form.eventType === 'hackathon' ? (
                     <>
@@ -1099,24 +1505,28 @@ const CreateEventWizard = ({ onClose, prefill = {}, onCreated, event }) => {
                     </div>
                   )}
 
-                  {createdEvent?.eventCode ? (
-                    <div className="success-bg mt-3 p-3 border-2 rounded">
-                      <div className="text-sm text-primary opacity-70">Event Code</div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-2xl font-bold text-primary">{createdEvent.eventCode}</div>
-                        <button 
-                          onClick={() => { navigator.clipboard?.writeText(createdEvent.eventCode); }} 
-                          className="btn-secondary px-2 py-1 border-2 rounded text-sm"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <div className="text-xs text-primary opacity-60">Share this code with judges so they can sign in to this event.</div>
+                      {!createdEvent && form.selectedJudges?.length > 0 && (
+                        <div className="mt-4">
+                          <p><strong>Authorized judges:</strong></p>
+                          <div className="ml-4 text-sm">
+                            {form.selectedJudges.map(email => {
+                              const judge = availableJudges.find(j => j.email === email);
+                              return (
+                                <div key={email} className="flex justify-between">
+                                  <span>{judge?.name || 'Unknown'}</span>
+                                  <span className="text-primary opacity-60">{email}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {!createdEvent && (
+                        <div className="mt-3 text-sm text-primary opacity-60">The event code will be generated after creation.</div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="mt-3 text-sm text-primary opacity-60">The event code will be generated after creation.</div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
