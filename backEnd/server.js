@@ -12,6 +12,7 @@ const DATA_FILE = path.join(__dirname, 'users.json');
 const EVENTS_FILE = path.join(__dirname, 'events.json');
 const REGISTRATIONS_FILE = path.join(__dirname, 'registrations.json');
 const SUBMISSIONS_FILE = path.join(__dirname, 'submissions.json');
+const REVIEWS_FILE = path.join(__dirname, 'reviews.json');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -184,6 +185,23 @@ async function readSubmissions() {
 
 async function writeSubmissions(items) {
   await fs.writeFile(SUBMISSIONS_FILE, JSON.stringify(items, null, 2));
+}
+
+async function readReviews() {
+  try {
+    const raw = await fs.readFile(REVIEWS_FILE, 'utf8');
+    return JSON.parse(raw || '[]');
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      await fs.writeFile(REVIEWS_FILE, '[]');
+      return [];
+    }
+    throw e;
+  }
+}
+
+async function writeReviews(items) {
+  await fs.writeFile(REVIEWS_FILE, JSON.stringify(items, null, 2));
 }
 
 // Fixed mapEventRow function - ensures all fields are properly mapped
@@ -845,7 +863,9 @@ app.get('/api/events', async (req, res) => {
       // map snake_case rows to camelCase
       return res.json((data || []).map(mapEventRow));
     } else {
-      const events = await readEvents();
+      const raw = await readEvents();
+      // normalize events so front-end receives consistent camelCase fields
+      const events = (raw || []).map(r => mapEventRow(r));
       return res.json(events);
     }
   } catch (err) {
@@ -971,19 +991,24 @@ app.post('/api/events/:id/validate-judge', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Missing email' });
 
     let ev;
+    console.log('[validate-judge] id=', id, 'supabaseEnabled=', !!supabaseAdmin);
     if (supabaseAdmin) {
-      const { data, error } = await supabaseAdmin.from('events')
-        .select('id, event_code, authorized_judges')
-        .or(`id.eq.${id},event_code.eq.${String(id).toUpperCase()}`)
-        .limit(1)
-        .single();
-      if (error && error.code !== 'PGRST116') { // ignore not found style errors
-        // PGRST116/404 mapping differs; handle absent separately
+      // Query all events and perform matching in JS to avoid edge cases
+      const { data, error } = await supabaseAdmin.from('events').select('*');
+      if (error) {
+        console.warn('[validate-judge] supabase fetch events error', error);
       }
-      ev = data ? mapEventRow(data) : null;
+      const list = (data || []).map(mapEventRow);
+      const normId = String(id).trim().toLowerCase();
+      ev = list.find(e => e && (String(e.id) === String(id) || String(e.id) === normId || String(e.eventCode || '').toLowerCase() === normId)) || null;
+      console.log('[validate-judge] supabase found=', ev && { id: ev.id, eventCode: ev.eventCode, authorizedJudges: ev.authorizedJudges });
     } else {
-      const events = await readEvents();
-      ev = events.find(e => e.id === id || (e.eventCode && e.eventCode.toUpperCase() === String(id).toUpperCase()));
+      // Fallback: read raw events from file and normalize with mapEventRow so
+      // fields like `event_code` (snake_case) are available as `eventCode`.
+      const raw = await readEvents();
+      const events = (raw || []).map(r => mapEventRow(r));
+  ev = events.find(e => e && (e.id === id || (e.eventCode && String(e.eventCode).toUpperCase() === String(id).toUpperCase())));
+  console.log('[validate-judge] fallback found=', ev && { id: ev.id, eventCode: ev.eventCode, authorizedJudges: ev.authorizedJudges });
     }
 
     if (!ev) return res.status(404).json({ error: 'Event not found' });
@@ -1292,11 +1317,12 @@ app.post('/api/events/:id/submissions', async (req, res) => {
 
 app.get('/api/submissions', async (req, res) => {
   try {
-    const { eventId, teamName } = req.query || {};
+    const { eventId, teamName, submitterEmail } = req.query || {};
     if (supabaseAdmin) {
       let query = supabaseAdmin.from('submissions').select('*');
       if (eventId) query = query.eq('event_id', eventId);
       if (teamName) query = query.ilike('team_name', `%${teamName}%`);
+      if (submitterEmail) query = query.eq('submitter_email', submitterEmail);
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) {
         console.error('Supabase submissions fetch error', error);
@@ -1308,9 +1334,137 @@ app.get('/api/submissions', async (req, res) => {
     let results = items;
     if (eventId) results = results.filter(r => r.event_id === eventId);
     if (teamName) results = results.filter(r => r.team_name && r.team_name.toLowerCase().includes(teamName.toLowerCase()));
+    if (submitterEmail) results = results.filter(r => (r.submitter_email || r.submitterEmail || '').toLowerCase() === String(submitterEmail).toLowerCase());
     return res.json(results.sort((a, b) => new Date(b.metadata.created_at) - new Date(a.metadata.created_at)));
   } catch (err) {
     console.error('list submissions error', err);
+    return res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// Create a review for a submission
+app.post('/api/reviews', async (req, res) => {
+  try {
+    const { submissionId, submission_id, score, feedback, reviewerEmail, reviewerName } = req.body || {};
+    if (!submissionId && !submission_id) return res.status(400).json({ error: 'Missing submissionId' });
+    const sid = submissionId || submission_id;
+    if (!reviewerEmail) return res.status(400).json({ error: 'Missing reviewerEmail' });
+
+    // Resolve submission to determine which event it belongs to
+    let submission = null;
+    if (supabaseAdmin) {
+      const { data: subData, error: subErr } = await supabaseAdmin.from('submissions').select('*').eq('id', sid).single();
+      if (subErr || !subData) return res.status(404).json({ error: 'Submission not found' });
+      submission = subData;
+    } else {
+      const subs = await readSubmissions();
+      submission = subs.find(s => String(s.id) === String(sid));
+      if (!submission) return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    // Attempt to locate the event for authorization checks
+    const possibleEventId = submission.event_id || submission.eventId || submission.eventId || submission.event_code || null;
+    const ev = await findEventByIdOrCode(possibleEventId);
+    if (!ev) {
+      // As a fallback, try to match by event title if provided on the submission
+      if (submission.event_title) {
+        const all = await (supabaseAdmin ? (await supabaseAdmin.from('events').select('*')).data : readEvents());
+        const list = (all || []).map(mapEventRow);
+        const matched = list.find(e => e && (String(e.eventTitle || '').toLowerCase() === String(submission.event_title || '').toLowerCase()));
+        if (matched) {
+          // use matched event
+          // eslint-disable-next-line no-unused-vars
+          ev = matched; // reassign for authorization below
+        }
+      }
+    }
+
+    if (!ev) return res.status(404).json({ error: 'Event for submission not found' });
+
+    const allowed = Array.isArray(ev.authorizedJudges) ? ev.authorizedJudges.map(a => String(a).toLowerCase()) : [];
+    if (allowed.length === 0 || !allowed.includes(String(reviewerEmail).toLowerCase())) {
+      return res.status(401).json({ error: 'Not authorized as judge for this event' });
+    }
+
+    // Build payload
+    const now = new Date().toISOString();
+    const payload = {
+      submission_id: sid,
+      score: typeof score === 'number' ? score : (score ? Number(score) : null),
+      feedback: feedback || null,
+      reviewer_email: String(reviewerEmail).toLowerCase(),
+      reviewer_name: reviewerName || null,
+      created_at: now
+    };
+
+    // Upsert: if a review by this reviewer for this submission exists, update it; otherwise insert
+    if (supabaseAdmin) {
+      try {
+        const { data: existing, error: existErr } = await supabaseAdmin.from('reviews').select('*').eq('submission_id', sid).eq('reviewer_email', payload.reviewer_email).single();
+        if (!existErr && existing && existing.id) {
+          // update existing
+          const { data: updated, error: updErr } = await supabaseUpdateWithColumnRetry('reviews', 'id', existing.id, payload);
+          if (updErr) {
+            console.error('Supabase review update error', updErr);
+            return res.status(500).json({ error: 'Failed to update review' });
+          }
+          return res.json(updated);
+        }
+
+        // insert new
+        const { data: created, error: insErr } = await supabaseInsertWithColumnRetry('reviews', payload);
+        if (insErr) {
+          console.error('Supabase review insert error', insErr);
+          return res.status(500).json({ error: 'Failed to create review' });
+        }
+        return res.json(created);
+      } catch (e) {
+        console.error('Supabase review upsert exception', e);
+        return res.status(500).json({ error: 'Server error' });
+      }
+    }
+
+    // File fallback: read, update if exists, else append
+    const items = await readReviews();
+    const idx = items.findIndex(r => String(r.submission_id) === String(sid) && String((r.reviewer_email || '').toLowerCase()) === String(payload.reviewer_email));
+    if (idx !== -1) {
+      const existing = items[idx];
+      const merged = { ...existing, ...payload };
+      items[idx] = merged;
+      await writeReviews(items);
+      return res.json(merged);
+    }
+
+    // create new
+    const newReview = { id: Date.now().toString(36) + Math.random().toString(36).slice(2,8), ...payload };
+    items.push(newReview);
+    await writeReviews(items);
+    return res.json(newReview);
+  } catch (err) {
+    console.error('create review error', err);
+    return res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// List reviews (filter by submissionId or reviewerEmail)
+app.get('/api/reviews', async (req, res) => {
+  try {
+    const { submissionId, reviewerEmail } = req.query || {};
+    if (supabaseAdmin) {
+      let q = supabaseAdmin.from('reviews').select('*');
+      if (submissionId) q = q.eq('submission_id', submissionId);
+      if (reviewerEmail) q = q.eq('reviewer_email', reviewerEmail);
+      const { data, error } = await q.order('created_at', { ascending: false });
+      if (error) return res.status(500).json({ error: 'Failed to fetch reviews' });
+      return res.json(data || []);
+    }
+    const items = await readReviews();
+    let results = items;
+    if (submissionId) results = results.filter(r => String(r.submission_id) === String(submissionId));
+    if (reviewerEmail) results = results.filter(r => (r.reviewer_email || '').toLowerCase() === String(reviewerEmail).toLowerCase());
+    return res.json(results.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)));
+  } catch (err) {
+    console.error('list reviews error', err);
     return res.status(500).json({ error: err.message || String(err) });
   }
 });
