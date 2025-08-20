@@ -93,6 +93,7 @@ const ParticipantDashboard = () => {
       if (!user || !user.email) return;
       try {
         const apiBase = import.meta.env.VITE_API_BASE || '';
+        console.log(`DEBUG: VITE_API_BASE = "${apiBase}"`);
         const encoded = encodeURIComponent(user.email);
         // Try configured API base first (if set), then relative proxy, then localhost
         const urls = [];
@@ -252,6 +253,7 @@ const ParticipantDashboard = () => {
     const loadEvents = async () => {
   // Prefer configured backend (VITE_API_BASE) first, then proxy relative path, then localhost fallback
   const apiBase = import.meta.env.VITE_API_BASE || '';
+  console.log(`DEBUG: VITE_API_BASE = "${apiBase}"`);
   const urls = [];
   if (apiBase) urls.push(`${apiBase.replace(/\/$/, '')}/api/events`);
   urls.push('/api/events');
