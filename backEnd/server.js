@@ -72,6 +72,17 @@ app.use(express.json({ limit: '15mb' }));
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Debug endpoint to check CORS configuration
+app.get('/api/debug/cors', (req, res) => {
+  res.json({
+    message: 'CORS debug info',
+    frontend_base_env: process.env.FRONTEND_BASE,
+    parsed_frontend_bases: FRONTEND_BASES,
+    request_origin: req.headers.origin,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Multer setup for image uploads
 let multer;
 try {
