@@ -25,6 +25,11 @@ const CreatorDashboard = () => {
   const [allReviews, setAllReviews] = useState([]);
   const [participantCount, setParticipantCount] = useState(0);
   const [totalReviewsCount, setTotalReviewsCount] = useState(0);
+  // Dashboard leaderboard aggregation
+  const [dashboardLeaderboard, setDashboardLeaderboard] = useState([]);
+  const [dashboardOverallAvg, setDashboardOverallAvg] = useState(null);
+  const [dashboardEvaluatedCount, setDashboardEvaluatedCount] = useState(0);
+  const [dashboardReviewsBySubmission, setDashboardReviewsBySubmission] = useState({});
 
   const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
@@ -186,6 +191,62 @@ const CreatorDashboard = () => {
     }
   };
 
+  // Aggregate reviews/submissions into a dashboard leaderboard (top teams across all events)
+  useEffect(() => {
+    try {
+      const subs = Array.isArray(allSubmissions) ? allSubmissions : [];
+      const revs = Array.isArray(allReviews) ? allReviews : [];
+      const submissionIds = subs.map(s => String(s.id));
+      const byId = {};
+      (revs || []).forEach(r => {
+        const sid = String(r.submission_id || r.submissionId || r.submission);
+        if (!submissionIds.includes(sid)) return;
+        if (!byId[sid]) byId[sid] = { total: 0, count: 0, reviews: [] };
+        const score = typeof r.score === 'number' ? r.score : (r.score ? Number(r.score) : 0);
+        byId[sid].total += score;
+        byId[sid].count += 1;
+        byId[sid].reviews.push(r);
+      });
+
+      const board = subs.map(s => {
+        const sid = String(s.id);
+        const agg = byId[sid] || { total: 0, count: 0, reviews: [] };
+        const avg = agg.count > 0 ? (agg.total / agg.count) : null;
+        return {
+          submissionId: sid,
+          teamName: s.teamName || s.team_name || s.project_name || s.submitter_name || (`Team ${sid}`),
+          avgScore: avg,
+          reviewCount: agg.count,
+          reviews: agg.reviews
+        };
+      }).sort((a, b) => {
+        if (a.avgScore === null && b.avgScore === null) return b.reviewCount - a.reviewCount;
+        if (a.avgScore === null) return 1;
+        if (b.avgScore === null) return -1;
+        if (b.avgScore === a.avgScore) return b.reviewCount - a.reviewCount;
+        return b.avgScore - a.avgScore;
+      });
+
+      setDashboardLeaderboard(board);
+      setDashboardReviewsBySubmission(byId);
+
+      let total = 0; let count = 0;
+      Object.keys(byId).forEach(k => {
+        total += byId[k].total;
+        count += byId[k].count;
+      });
+      setDashboardOverallAvg(count > 0 ? (total / count) : null);
+      const evaluated = Object.keys(byId).filter(k => byId[k].count > 0).length;
+      setDashboardEvaluatedCount(evaluated);
+    } catch (err) {
+      console.warn('Failed to compute dashboard leaderboard', err);
+      setDashboardLeaderboard([]);
+      setDashboardOverallAvg(null);
+      setDashboardEvaluatedCount(0);
+      setDashboardReviewsBySubmission({});
+    }
+  }, [allSubmissions, allReviews]);
+
   return (
     <>
       <style jsx global>{`
@@ -315,7 +376,7 @@ const CreatorDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-primary opacity-60 text-sm">Total Participants</p>
-                  <p className="text-3xl font-black text-primary">{events.reduce((sum, ev) => sum + (Array.isArray(ev.participants) ? ev.participants.length : 0), 0)}</p>
+                  <p className="text-3xl font-black text-primary">{participantCount}</p>
                 </div>
                 <Users className="w-8 h-8 text-accent" />
               </div>
@@ -324,7 +385,7 @@ const CreatorDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-primary opacity-60 text-sm">Total Submissions</p>
-                  <p className="text-3xl font-black text-primary">{events.reduce((sum, ev) => sum + (Array.isArray(ev.submissions) ? ev.submissions.length : 0), 0)}</p>
+                  <p className="text-3xl font-black text-primary">{Array.isArray(allSubmissions) ? allSubmissions.length : 0}</p>
                 </div>
                 <FileText className="w-8 h-8 text-accent" />
               </div>
@@ -343,6 +404,46 @@ const CreatorDashboard = () => {
           {/* Recent Events & Performance */}
           <div className="grid grid-cols-1 gap-6 mb-8">
             <div className="space-y-6">
+              {/* Dashboard Leaderboard Summary */}
+              <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
+                <h3 className="text-lg font-bold text-primary mb-4">Leaderboard Snapshot</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                  <div className="bg-secondary p-4 rounded-lg border border-themed">
+                    <p className="text-sm text-primary opacity-60">Evaluated Submissions</p>
+                    <p className="text-2xl font-black text-primary">{dashboardEvaluatedCount}</p>
+                  </div>
+                  <div className="bg-secondary p-4 rounded-lg border border-themed">
+                    <p className="text-sm text-primary opacity-60">Pending</p>
+                    <p className="text-2xl font-black text-primary">{Math.max(0, (allSubmissions || []).length - dashboardEvaluatedCount)}</p>
+                  </div>
+                  <div className="bg-secondary p-4 rounded-lg border border-themed">
+                    <p className="text-sm text-primary opacity-60">Average Score</p>
+                    <p className="text-2xl font-black text-primary">{dashboardOverallAvg !== null ? dashboardOverallAvg.toFixed(1) : '-'}</p>
+                  </div>
+                  <div className="bg-secondary p-4 rounded-lg border border-themed">
+                    <p className="text-sm text-primary opacity-60">Total Reviews</p>
+                    <p className="text-2xl font-black text-primary">{totalReviewsCount}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  {dashboardLeaderboard.length === 0 ? (
+                    <div className="text-primary opacity-60">No scores yet. Judges' evaluations will populate this leaderboard.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {dashboardLeaderboard.slice(0,6).map((row, idx) => (
+                        <div key={row.submissionId} className="p-3 bg-primary rounded-lg border border-themed">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="font-semibold text-primary">{idx+1}. {row.teamName}</div>
+                            <div className="text-accent font-black text-xl">{row.avgScore !== null ? row.avgScore.toFixed(1) : '—'}</div>
+                          </div>
+                          <div className="text-xs text-primary opacity-70">Reviews: {row.reviewCount}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
               {/* Recent Events */}
               <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
                 <h3 className="text-lg font-bold text-primary mb-4">Recent Events</h3>
@@ -382,6 +483,9 @@ const CreatorDashboard = () => {
                               <button onClick={() => handleOpenReviewResults(ev)} className="btn-primary text-white px-3 py-1.5 rounded-lg border-2 text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1 cursor-pointer">
                                 <Eye className="w-3 h-3" />
                                 Review Result
+                              </button>
+                              <button onClick={() => { setSelectedEventForLeaderboard(ev); setShowLeaderboard(true); }} className="btn-secondary px-3 py-1.5 rounded-lg border-2 text-xs font-medium hover:bg-primary transition-colors flex items-center gap-1 cursor-pointer">
+                                Leaderboard
                               </button>
                             </div>
                           </div>
@@ -573,6 +677,9 @@ const CreatorDashboard = () => {
                             <button onClick={() => handleOpenReviewResults(ev)} className="bg-blue-500 text-white px-3 py-1 rounded border-2 text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1">
                               <Eye className="w-3 h-3" />
                               Review Result
+                            </button>
+                            <button onClick={() => { setSelectedEventForLeaderboard(ev); setShowLeaderboard(true); }} className="btn-secondary px-3 py-1 rounded border-2 text-xs font-medium hover:bg-primary transition-colors">
+                              View Leaderboard
                             </button>
                           </div>
                         </div>

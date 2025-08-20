@@ -8,6 +8,9 @@ const EvaluateCandidates = ({ onBack, eventAccessKey, event, submissions = [] })
   const [points, setPoints] = useState({});
   const [allReviews, setAllReviews] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [evaluatedCount, setEvaluatedCount] = useState(0);
+  const [overallAvg, setOverallAvg] = useState(null);
+  const [reviewsBySubmission, setReviewsBySubmission] = useState({});
 
   const handleFeedbackChange = (teamId, feedback) => {
     setFeedbacks(prev => ({ ...prev, [teamId]: feedback }));
@@ -25,12 +28,20 @@ const EvaluateCandidates = ({ onBack, eventAccessKey, event, submissions = [] })
     // POST review to backend
     (async () => {
       try {
+        // Ensure we have an authenticated reviewer email
+        const reviewerEmail = (authUser && authUser.email) || (window.__auth && window.__auth.email) || null;
+        const reviewerName = (authUser && authUser.name) || (window.__auth && window.__auth.name) || null;
+        if (!reviewerEmail) {
+          alert('You must be signed in as a judge to submit evaluations');
+          return;
+        }
+
         const body = {
           submissionId: teamId,
           score: Number(teamPoints),
           feedback,
-          reviewerEmail: (window.__auth && window.__auth.email) || undefined,
-          reviewerName: (window.__auth && window.__auth.name) || undefined
+          reviewerEmail: String(reviewerEmail).toLowerCase(),
+          reviewerName: reviewerName || undefined
         };
         const res = await fetch('/api/reviews', {
           method: 'POST',
@@ -62,7 +73,7 @@ const EvaluateCandidates = ({ onBack, eventAccessKey, event, submissions = [] })
       setAllReviews(reviews || []);
       // compute per-submission aggregates for current submissions
       const submissionIds = (submissions || []).map(s => String(s.id));
-      const byId = {};
+  const byId = {};
       (reviews || []).forEach(r => {
         const sid = String(r.submission_id || r.submissionId || r.submission);
         if (!submissionIds.includes(sid)) return;
@@ -93,7 +104,21 @@ const EvaluateCandidates = ({ onBack, eventAccessKey, event, submissions = [] })
         return b.avgScore - a.avgScore;
       });
 
-      setLeaderboard(board);
+  setLeaderboard(board);
+  setReviewsBySubmission(byId);
+
+      // compute overall average across all reviews included in byId
+      let total = 0;
+      let count = 0;
+      Object.keys(byId).forEach(k => {
+        const a = byId[k];
+        total += a.total;
+        count += a.count;
+      });
+      setOverallAvg(count > 0 ? (total / count) : null);
+      // number of submissions that have at least one review
+      const evaluated = Object.keys(byId).filter(k => byId[k].count > 0).length;
+      setEvaluatedCount(evaluated);
     } catch (e) {
       console.error('Failed to fetch reviews for leaderboard', e);
     }
@@ -238,15 +263,15 @@ const EvaluateCandidates = ({ onBack, eventAccessKey, event, submissions = [] })
             </div>
             <div className="bg-primary p-4 rounded-lg border-2 border-themed shadow-themed">
               <p className="text-sm text-primary opacity-60">Evaluated</p>
-              <p className="text-2xl font-black text-primary">{Object.keys(points).length}</p>
+              <p className="text-2xl font-black text-primary">{evaluatedCount}</p>
             </div>
             <div className="bg-primary p-4 rounded-lg border-2 border-themed shadow-themed">
               <p className="text-sm text-primary opacity-60">Pending</p>
-              <p className="text-2xl font-black text-primary">{submissions.length - Object.keys(points).length}</p>
+              <p className="text-2xl font-black text-primary">{Math.max(0, submissions.length - evaluatedCount)}</p>
             </div>
             <div className="bg-primary p-4 rounded-lg border-2 border-themed shadow-themed">
               <p className="text-sm text-primary opacity-60">Average Score</p>
-              <p className="text-2xl font-black text-primary">-</p>
+              <p className="text-2xl font-black text-primary">{overallAvg !== null ? overallAvg.toFixed(1) : '-'}</p>
             </div>
           </div>
 
@@ -298,6 +323,7 @@ const EvaluateCandidates = ({ onBack, eventAccessKey, event, submissions = [] })
                         <td className="px-6 py-4"><div className="font-bold text-primary">{teamName}</div></td>
                         <td className="px-6 py-4"><div className="text-primary">{sub.submitter_name || sub.submitterName || sub.submitter_email || '-'}</div></td>
                         <td className="px-6 py-4"><div className="text-primary font-medium">{projectTitle}</div></td>
+                        <td className="px-6 py-4"><div className="text-primary">{reviewsBySubmission[id] && reviewsBySubmission[id].count > 0 ? (reviewsBySubmission[id].total / reviewsBySubmission[id].count).toFixed(1) : '-'}</div></td>
                         <td className="px-6 py-4">
                           {repoLink ? (
                             <a href={repoLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-accent hover:underline">

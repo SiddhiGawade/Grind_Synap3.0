@@ -18,77 +18,64 @@ const Leaderboard = ({ event, onClose }) => {
     setLoading(true);
     setError(null);
     try {
+      // try server-side leaderboard endpoint first
       const res = await fetch(`${API_BASE}/api/events/${event.id}/leaderboard`);
-      if (!res.ok) {
-        throw new Error('Failed to fetch leaderboard data');
+      if (res.ok) {
+        const data = await res.json();
+        // normalize to expected shape
+        const lb = (data.leaderboard || []).map((t, i) => ({
+          id: t.id || t.submissionId || i + 1,
+          teamName: t.teamName || t.team_name || t.name || `Team ${i + 1}`,
+          members: t.members || t.teamMembers || t.team_members || [],
+          totalScore: typeof t.totalScore === 'number' ? t.totalScore : (t.avgScore || t.total_score || 0),
+          judgeScores: t.judgeScores || t.reviews || t.scores || [],
+          rank: t.rank || i + 1,
+          submissionTitle: t.submissionTitle || t.project_title || t.projectTitle || ''
+        }));
+        setLeaderboardData(lb);
+        return;
       }
-      const data = await res.json();
-      setLeaderboardData(data.leaderboard || []);
+
+      // Fallback: build from submissions + reviews endpoints
+      // fetch submissions for event and reviews, then compute averages per submission
+      const evId = event.id || event.eventCode || event.event_code;
+      const [subsRes, revsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/submissions?eventId=${encodeURIComponent(evId)}`),
+        fetch(`${API_BASE}/api/reviews`)
+      ]);
+      const subs = subsRes.ok ? await subsRes.json() : [];
+      const revs = revsRes.ok ? await revsRes.json() : [];
+
+      // group reviews by submission id
+      const bySubmission = {};
+      (revs || []).forEach(r => {
+        const sid = String(r.submission_id || r.submissionId || r.submission);
+        if (!bySubmission[sid]) bySubmission[sid] = [];
+        bySubmission[sid].push(r);
+      });
+
+      const computed = (subs || []).map((s, i) => {
+        const sid = String(s.id || s.submissionId || `sub-${i}`);
+        const reviewsFor = bySubmission[sid] || [];
+        const judgeScores = reviewsFor.map(r => ({ judgeName: r.reviewer_name || r.reviewerName || r.reviewer_email || r.reviewerEmail, score: (typeof r.score === 'number' ? r.score : (r.score ? Number(r.score) : 0)), criteria: r.criteria || r.category || '' }));
+        const totalScore = judgeScores.length ? (judgeScores.reduce((a,b) => a + (b.score || 0), 0) / judgeScores.length) : 0;
+        return {
+          id: sid,
+          teamName: s.teamName || s.team_name || s.submitter_name || s.project_name || `Team ${i+1}`,
+          members: s.teamMembers || s.members || s.registrants || [],
+          totalScore,
+          judgeScores,
+          rank: 0,
+          submissionTitle: s.project_title || s.projectTitle || s.title || ''
+        };
+      }).sort((a,b) => b.totalScore - a.totalScore);
+
+      // assign ranks
+      computed.forEach((t, idx) => { t.rank = idx + 1; });
+      setLeaderboardData(computed);
     } catch (err) {
       setError(err.message || 'Failed to load leaderboard');
-      // Mock data for demonstration
-      setLeaderboardData([
-        {
-          id: 1,
-          teamName: "Code Warriors",
-          members: ["Alice Johnson", "Bob Smith", "Carol Davis"],
-          totalScore: 95.5,
-          judgeScores: [
-            { judgeName: "Dr. Smith", score: 96, criteria: "Innovation" },
-            { judgeName: "Prof. Johnson", score: 95, criteria: "Technical Implementation" }
-          ],
-          rank: 1,
-          submissionTitle: "AI-Powered Healthcare Assistant"
-        },
-        {
-          id: 2,
-          teamName: "Tech Innovators",
-          members: ["David Wilson", "Emma Brown", "Frank Miller"],
-          totalScore: 92.3,
-          judgeScores: [
-            { judgeName: "Dr. Smith", score: 93, criteria: "Innovation" },
-            { judgeName: "Prof. Johnson", score: 91.5, criteria: "Technical Implementation" }
-          ],
-          rank: 2,
-          submissionTitle: "Smart City Traffic Management"
-        },
-        {
-          id: 3,
-          teamName: "Digital Pioneers",
-          members: ["Grace Lee", "Henry Taylor", "Ivy Chen"],
-          totalScore: 89.7,
-          judgeScores: [
-            { judgeName: "Dr. Smith", score: 90, criteria: "Innovation" },
-            { judgeName: "Prof. Johnson", score: 89.4, criteria: "Technical Implementation" }
-          ],
-          rank: 3,
-          submissionTitle: "Blockchain-based Voting System"
-        },
-        {
-          id: 4,
-          teamName: "Future Builders",
-          members: ["Jack Anderson", "Kate Wilson"],
-          totalScore: 87.2,
-          judgeScores: [
-            { judgeName: "Dr. Smith", score: 88, criteria: "Innovation" },
-            { judgeName: "Prof. Johnson", score: 86.4, criteria: "Technical Implementation" }
-          ],
-          rank: 4,
-          submissionTitle: "Green Energy Monitoring App"
-        },
-        {
-          id: 5,
-          teamName: "Code Crafters",
-          members: ["Liam Garcia", "Maya Patel", "Noah Kim"],
-          totalScore: 84.8,
-          judgeScores: [
-            { judgeName: "Dr. Smith", score: 85, criteria: "Innovation" },
-            { judgeName: "Prof. Johnson", score: 84.6, criteria: "Technical Implementation" }
-          ],
-          rank: 5,
-          submissionTitle: "Educational VR Platform"
-        }
-      ]);
+      setLeaderboardData([]);
     } finally {
       setLoading(false);
     }
@@ -120,6 +107,47 @@ const Leaderboard = ({ event, onClose }) => {
         return `${baseClasses} bg-gradient-to-r from-blue-400 to-blue-600 text-white shadow-lg`;
     }
   };
+
+  // extract gmail addresses from a members array (strings or objects)
+  const getMemberGmails = (members) => {
+    if (!Array.isArray(members)) return [];
+    const emails = members.map(m => {
+      if (!m) return '';
+      if (typeof m === 'string') return m.includes('@') ? m.trim() : '';
+      if (typeof m === 'object') {
+        // look for any string-valued property that looks like an email
+        for (const val of Object.values(m)) {
+          if (typeof val === 'string' && val.includes('@')) return val.trim();
+        }
+        return (m.email || m.emailAddress || m.email_address || '').trim();
+      }
+      return '';
+    }).filter(Boolean);
+    return emails.filter(e => e.toLowerCase().endsWith('@gmail.com'));
+  };
+
+  // Format a member entry into a readable string (email preferred, then name)
+  const formatMemberDisplay = (m) => {
+    if (!m) return '';
+    if (typeof m === 'string') return m;
+    if (typeof m === 'object') {
+      // prefer email-like values
+      for (const val of Object.values(m)) {
+        if (typeof val === 'string' && val.includes('@')) return val.trim();
+      }
+      // prefer name-like keys
+      return (m.name || m.fullName || m.full_name || m.displayName || m.username || m.handle || '').toString();
+    }
+    return String(m);
+  };
+
+  // Event-level performance metrics derived from leaderboardData
+  const totalTeams = leaderboardData.length;
+  const evaluatedTeams = leaderboardData.filter(t => Array.isArray(t.judgeScores) && t.judgeScores.length > 0).length;
+  const totalReviews = leaderboardData.reduce((sum, t) => sum + (Array.isArray(t.judgeScores) ? t.judgeScores.length : 0), 0);
+  const avgScore = totalTeams ? (leaderboardData.reduce((s, t) => s + (typeof t.totalScore === 'number' ? t.totalScore : 0), 0) / totalTeams) : 0;
+  const highestScore = leaderboardData[0]?.totalScore || 0;
+  const evaluatedPercent = totalTeams ? Math.round((evaluatedTeams / totalTeams) * 100) : 0;
 
   return (
     <>
@@ -209,45 +237,55 @@ const Leaderboard = ({ event, onClose }) => {
 
             {leaderboardData.length > 0 && (
               <>
-                {/* Stats Overview */}
+                {/* Top 3 Highlight Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                  <div className="bg-secondary p-4 rounded-xl border-2 border-themed shadow-themed">
-                    <div className="flex items-center gap-3">
-                      <Users className="w-8 h-8 text-accent" />
-                      <div>
-                        <p className="text-2xl font-black text-primary">{leaderboardData.length}</p>
-                        <p className="text-sm text-primary opacity-70">Total Teams</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-secondary p-4 rounded-xl border-2 border-themed shadow-themed">
-                    <div className="flex items-center gap-3">
-                      <Star className="w-8 h-8 text-yellow-500" />
-                      <div>
-                        <p className="text-2xl font-black text-primary">{leaderboardData[0]?.totalScore?.toFixed(1) || 'N/A'}</p>
-                        <p className="text-sm text-primary opacity-70">Highest Score</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-secondary p-4 rounded-xl border-2 border-themed shadow-themed">
-                    <div className="flex items-center gap-3">
-                      <Trophy className="w-8 h-8 text-accent" />
-                      <div>
-                        <p className="text-2xl font-black text-primary">{(leaderboardData.reduce((sum, team) => sum + team.totalScore, 0) / leaderboardData.length).toFixed(1)}</p>
-                        <p className="text-sm text-primary opacity-70">Average Score</p>
-                      </div>
-                    </div>
-                  </div>
+                  { [0,1,2].map(i => {
+                      const team = leaderboardData[i];
+                      if (!team) return (
+                        <div key={i} className="bg-secondary p-4 rounded-xl border-2 border-themed shadow-themed">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">{i+1}</div>
+                            <div>
+                              <p className="text-2xl font-black text-primary">-</p>
+                              <p className="text-sm text-primary opacity-70">{['Gold','Silver','Bronze'][i] || 'Top'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                      const isGold = i === 0;
+                      const cardClass = isGold ? 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white' : i === 1 ? 'bg-gradient-to-r from-gray-300 to-gray-500 text-white' : 'bg-gradient-to-r from-amber-400 to-amber-600 text-white';
+                      const gmails = getMemberGmails(team.members);
+                      const formattedMembers = Array.isArray(team.members) ? team.members.map(formatMemberDisplay).filter(Boolean) : [];
+                      const memberLine = gmails.length ? gmails.join(', ') : (formattedMembers.length ? formattedMembers.join(', ') : '');
+                      return (
+                        <div key={team.id} className={`p-6 rounded-xl border-2 border-themed shadow-themed ${cardClass}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="flex items-center gap-3">
+                                <div className="px-3 py-1 rounded-full bg-white/20 text-sm font-bold">#{team.rank}</div>
+                                <h3 className="text-xl font-bold">{team.teamName}</h3>
+                              </div>
+                              <p className="text-sm opacity-80 mt-2">{team.submissionTitle}</p>
+                              {memberLine && (
+                                <p className="text-xs opacity-90 mt-1">{memberLine}</p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <div className="text-3xl font-black">{team.totalScore.toFixed(1)}</div>
+                              <div className="text-sm opacity-80">Total Score</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
 
-                {/* Leaderboard */}
+                {/* Leaderboard List */}
                 <div className="space-y-4">
                   {leaderboardData.map((team, index) => (
                     <div 
                       key={team.id} 
-                      className={`leaderboard-card p-6 rounded-xl border-2 border-themed shadow-themed ${
-                        team.rank <= 3 ? `rank-${team.rank}` : ''
-                      }`}
+                      className={`leaderboard-card p-6 rounded-xl border-2 border-themed shadow-themed ${team.rank <= 3 ? `rank-${team.rank}` : ''}`}
                     >
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-4">
@@ -278,16 +316,18 @@ const Leaderboard = ({ event, onClose }) => {
 
                       {/* Team Members */}
                       <div className="mb-4">
-                        <p className="text-sm font-medium text-primary mb-2">Team Members:</p>
                         <div className="flex flex-wrap gap-2">
-                          {team.members.map((member, idx) => (
-                            <span 
-                              key={idx}
-                              className="bg-white/50 px-3 py-1 rounded-full text-xs text-primary border border-themed"
-                            >
-                              {member}
-                            </span>
-                          ))}
+                          {Array.isArray(team.members) && team.members.map((member, idx) => {
+                            const label = formatMemberDisplay(member);
+                            return (
+                              <span 
+                                key={idx}
+                                className="bg-white/50 px-3 py-1 rounded-full text-xs text-primary border border-themed"
+                              >
+                                {label}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -295,7 +335,7 @@ const Leaderboard = ({ event, onClose }) => {
                       <div>
                         <p className="text-sm font-medium text-primary mb-2">Judge Evaluations:</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {team.judgeScores.map((judgeScore, idx) => (
+                          {Array.isArray(team.judgeScores) && team.judgeScores.map((judgeScore, idx) => (
                             <div 
                               key={idx}
                               className="bg-white/30 p-3 rounded-lg border border-themed"
@@ -314,13 +354,6 @@ const Leaderboard = ({ event, onClose }) => {
                     </div>
                   ))}
                 </div>
-
-                {leaderboardData.length === 0 && !loading && (
-                  <div className="text-center py-12">
-                    <Trophy className="w-16 h-16 text-primary opacity-30 mx-auto mb-4" />
-                    <p className="text-primary opacity-70">No teams have been evaluated yet.</p>
-                  </div>
-                )}
               </>
             )}
           </div>
