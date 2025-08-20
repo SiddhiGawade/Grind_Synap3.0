@@ -43,7 +43,10 @@ const EvaluateCandidates = ({ onBack, eventAccessKey, event, submissions = [] })
           reviewerEmail: String(reviewerEmail).toLowerCase(),
           reviewerName: reviewerName || undefined
         };
-        const res = await fetch('/api/reviews', {
+        const apiBase = import.meta.env.VITE_API_BASE || '';
+        const reviewsUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/reviews` : '/api/reviews';
+        
+        const res = await fetch(reviewsUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -67,7 +70,10 @@ const EvaluateCandidates = ({ onBack, eventAccessKey, event, submissions = [] })
   // Fetch all reviews and compute leaderboard (average score per submission)
   const fetchReviews = async () => {
     try {
-      const res = await fetch('/api/reviews');
+      const apiBase = import.meta.env.VITE_API_BASE || '';
+      const reviewsUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/reviews` : '/api/reviews';
+      
+      const res = await fetch(reviewsUrl);
       if (!res.ok) return;
       const reviews = await res.json();
       setAllReviews(reviews || []);

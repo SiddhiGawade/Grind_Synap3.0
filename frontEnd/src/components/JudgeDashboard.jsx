@@ -56,7 +56,10 @@ const JudgeDashboard = () => {
       }
 
       // Validation passed — fetch event details from events list and submissions for that event
-      const eventsRes = await fetch('/api/events');
+      const apiBase = import.meta.env.VITE_API_BASE || '';
+      const eventsUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/events` : '/api/events';
+      
+      const eventsRes = await fetch(eventsUrl);
       if (!eventsRes.ok) throw new Error('Failed to load events');
       const events = await eventsRes.json();
       // find by id or eventCode (case-insensitive)
@@ -71,7 +74,8 @@ const JudgeDashboard = () => {
 
       // fetch submissions for this event
       const eventId = found.id || found.eventId || found.event_code || found.eventCode || key;
-      const subsRes = await fetch(`/api/submissions?eventId=${encodeURIComponent(eventId)}`);
+      const subsUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/submissions?eventId=${encodeURIComponent(eventId)}` : `/api/submissions?eventId=${encodeURIComponent(eventId)}`;
+      const subsRes = await fetch(subsUrl);
       if (!subsRes.ok) throw new Error('Failed to load submissions');
       const subs = await subsRes.json();
 
@@ -99,7 +103,12 @@ const JudgeDashboard = () => {
       if (!user?.email) return;
       setLoadingAssigned(true);
       try {
-        const [evRes, subRes, revRes] = await Promise.all([fetch('/api/events'), fetch('/api/submissions'), fetch('/api/reviews')]);
+        const apiBase = import.meta.env.VITE_API_BASE || '';
+        const eventsUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/events` : '/api/events';
+        const subsUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/submissions` : '/api/submissions';
+        const reviewsUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/reviews` : '/api/reviews';
+        
+        const [evRes, subRes, revRes] = await Promise.all([fetch(eventsUrl), fetch(subsUrl), fetch(reviewsUrl)]);
         if (!evRes.ok || !subRes.ok) {
           setAssignedEvents([]);
           setAssignedSubmissions([]);
