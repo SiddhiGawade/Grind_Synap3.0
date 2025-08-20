@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hackathon Invitation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            color: #333333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .event-details {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .event-details h3 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 20px;
+        }
+        .detail-row {
+            display: flex;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #5a6c7d;
+            min-width: 140px;
+            margin-right: 10px;
+        }
+        .detail-value {
+            color: #2c3e50;
+        }
+        .team-info {
+            background-color: #e8f5e8;
+            border-left: 4px solid #28a745;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .team-info h3 {
+            margin: 0 0 15px 0;
+            color: #155724;
+            font-size: 18px;
+        }
+        .important-note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .important-note h4 {
+            margin: 0 0 10px 0;
+            color: #856404;
+        }
+        .cta-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 16px;
+            transition: transform 0.2s;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .footer {
+            background-color: #2c3e50;
+            color: #ffffff;
+            padding: 20px;
+            text-align: center;
+        }
+        .footer p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .social-links {
+            margin: 15px 0;
+        }
+        .social-links a {
+            color: #ffffff;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+                width: auto;
+            }
+            .header h1 {
+                font-size: 24px;
+            }
+            .detail-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .detail-label {
+                min-width: auto;
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎉 You're Invited!</h1>
+            <p>Welcome to {{event_name}}</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <div class="greeting">
+                Hello {{participant_name}},
+            </div>
+
+            <p>Congratulations! You have been successfully registered for <strong>{{event_name}}</strong>. We're excited to have you participate in this amazing {{event_type}} event!</p>
+
+            <!-- Event Details -->
+            <div class="event-details">
+                <h3>📅 Event Details</h3>
+                <div class="detail-row">
+                    <span class="detail-label">Event Name:</span>
+                    <span class="detail-value">{{event_name}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Event Type:</span>
+                    <span class="detail-value">{{event_type}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Start Date:</span>
+                    <span class="detail-value">{{event_start_date}} at {{event_start_time}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">End Date:</span>
+                    <span class="detail-value">{{event_end_date}} at {{event_end_time}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Mode:</span>
+                    <span class="detail-value">{{event_mode}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Venue:</span>
+                    <span class="detail-value">{{event_venue}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Event Code:</span>
+                    <span class="detail-value"><strong>{{event_code}}</strong></span>
+                </div>
+            </div>
+
+            <!-- Team Information -->
+            <div class="team-info">
+                <h3>👥 Team Information</h3>
+                <div class="detail-row">
+                    <span class="detail-label">Team Name:</span>
+                    <span class="detail-value">{{team_name}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Team Leader:</span>
+                    <span class="detail-value">{{team_leader_name}} ({{team_leader_email}})</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Team Size:</span>
+                    <span class="detail-value">{{min_team_size}} - {{max_team_size}} members</span>
+                </div>
+            </div>
+
+            <!-- Important Information -->
+            <div class="important-note">
+                <h4>📝 Important Information</h4>
+                <p><strong>Registration Deadline:</strong> {{registration_deadline}}</p>
+                <p><strong>Eligibility:</strong> {{eligibility}}</p>
+                <p><strong>Themes:</strong> {{themes}}</p>
+                <p><strong>Tracks:</strong> {{tracks}}</p>
+            </div>
+
+            <!-- Event Description -->
+            <div style="margin: 20px 0;">
+                <h4 style="color: #2c3e50;">📖 About the Event</h4>
+                <p>{{event_description}}</p>
+            </div>
+
+            <!-- Prizes and Guidelines -->
+            <div style="margin: 20px 0;">
+                <h4 style="color: #2c3e50;">🏆 Prize Details</h4>
+                <p>{{prize_details}}</p>
+                
+                <h4 style="color: #2c3e50;">📋 Submission Guidelines</h4>
+                <p>{{submission_guidelines}}</p>
+                
+                <h4 style="color: #2c3e50;">⚖️ Evaluation Criteria</h4>
+                <p>{{evaluation_criteria}}</p>
+            </div>
+
+            <!-- Call to Action -->
+            <div class="cta-section">
+                <p>Ready to innovate and compete? Join us for an incredible experience!</p>
+                <a href="#" class="cta-button">Get Ready to Code! 🚀</a>
+            </div>
+
+            <!-- Contact Information -->
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                <h4 style="color: #2c3e50;">📞 Contact Information</h4>
+                <p><strong>Organizer:</strong> {{organizer_name}}</p>
+                <p><strong>Email:</strong> {{organizer_email}}</p>
+                <p>If you have any questions or need assistance, please don't hesitate to reach out to us.</p>
+            </div>
+
+            <p style="margin-top: 30px;">
+                <strong>What's Next?</strong><br>
+                • Keep an eye on your email for updates and announcements<br>
+                • Start preparing with your team<br>
+                • Join our community channels for networking<br>
+                • Bring your creativity and coding skills!
+            </p>
+
+            <p style="margin-top: 20px; font-style: italic; color: #666;">
+                We can't wait to see what amazing projects you'll create! Good luck and have fun! 🌟
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>{{event_name}}</strong></p>
+            <p>Organized by {{organizer_name}}</p>
+            <div class="social-links">
+                <a href="#">Facebook</a> |
+                <a href="#">Twitter</a> |
+                <a href="#">LinkedIn</a> |
+                <a href="#">Instagram</a>
+            </div>
+            <p style="font-size: 12px; opacity: 0.8;">
+                This email was sent because you registered for {{event_name}}. 
+                If you have any questions, please contact {{organizer_email}}.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

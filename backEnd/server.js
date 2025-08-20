@@ -1108,6 +1108,39 @@ app.post('/api/send-judge-emails', async (req, res) => {
   }
 });
 
+/**
+ * Send participation invitation emails to all participants of an event
+ */
+app.post('/api/send-participation-emails', async (req, res) => {
+  try {
+    const { participantEmails, eventDetails, teamName } = req.body || {};
+    
+    if (!participantEmails || !Array.isArray(participantEmails) || participantEmails.length === 0) {
+      return res.status(400).json({ error: 'No participant emails provided' });
+    }
+    if (!eventDetails) {
+      return res.status(400).json({ error: 'Missing event details' });
+    }
+
+    console.log('Participation email sending requested for participants:', participantEmails);
+    console.log('Event details:', eventDetails);
+    console.log('Team name:', teamName);
+
+    // Return the data for frontend to handle email sending with EmailJS
+    return res.json({ 
+      message: 'Participation emails ready to send',
+      participants: participantEmails,
+      eventDetails,
+      teamName,
+      count: participantEmails.length 
+    });
+
+  } catch (err) {
+    console.error('Send participation emails error', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ... (make sure this endpoint is above your app.listen line)
 
 // Start the server
@@ -1174,7 +1207,12 @@ app.post('/api/events/:id/register', async (req, res) => {
         console.error('Supabase registration insert error', error);
         return res.status(500).json({ error: 'Failed to register' });
       }
-      return res.json(data);
+      // Include participant emails in response for email sending
+      const response = {
+        ...data,
+        participant_emails: row.metadata.participant_emails
+      };
+      return res.json(response);
     }
 
     // file fallback
@@ -1182,7 +1220,12 @@ app.post('/api/events/:id/register', async (req, res) => {
     row.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     items.push(row);
     await writeRegistrations(items);
-    return res.json(row);
+    // Include participant emails in response for email sending
+    const response = {
+      ...row,
+      participant_emails: row.metadata.participant_emails
+    };
+    return res.json(response);
   } catch (err) {
     console.error('Registration create error', err);
     return res.status(500).json({ error: err.message || String(err) });
