@@ -348,7 +348,7 @@ const JudgeDashboard = () => {
                 <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center border-2 border-themed shadow-themed">
                   <Trophy className="w-6 h-6 text-secondary" />
                 </div>
-                <h1 className="text-xl font-black text-primary">SynapHack 3.0</h1>
+                <h1 className="text-xl font-black text-primary">Eventure</h1>
               </div>
               
               <div className="flex items-center gap-4">

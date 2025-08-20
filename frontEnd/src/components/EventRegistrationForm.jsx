@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, ChevronRight, Info } from 'lucide-react';
+import emailjs from '@emailjs/browser';
 
 const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) => {
   const [step, setStep] = useState(currentStep);
@@ -130,6 +131,95 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
     setStep(step - 1);
   };
 
+  // Function to send invitation emails to all participants
+  const sendInvitationEmails = async (participantEmails, registrationData) => {
+    try {
+      // Validate EmailJS configuration
+      const emailJSConfig = {
+        serviceId: import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        templateId: import.meta.env.VITE_EMAILJS_INVITATION_TEMPLATE_ID,
+        publicKey: import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+      };
+
+      console.log('EmailJS Config:', emailJSConfig);
+
+      // Validate configuration
+      if (!emailJSConfig.serviceId || !emailJSConfig.templateId || !emailJSConfig.publicKey) {
+        throw new Error('EmailJS configuration is incomplete');
+      }
+
+      // Validate and filter emails
+      const validEmails = participantEmails.filter(email => {
+        const isValid = email && /^\S+@\S+\.\S+$/.test(email);
+        if (!isValid) {
+          console.warn('Invalid email address:', email);
+        }
+        return isValid;
+      });
+
+      if (validEmails.length === 0) {
+        throw new Error('No valid email addresses to send to');
+      }
+
+      console.log('Sending emails to:', validEmails);
+
+      // Send email to each participant
+      const emailPromises = validEmails.map(async (participantEmail) => {
+        const templateParams = {
+          to_name: participantEmail === registrationData.email ? registrationData.name : 'Team Member',
+          to_email: participantEmail,
+          participant_name: participantEmail === registrationData.email ? registrationData.name : 'Team Member',
+          event_name: event.eventTitle,
+          event_description: event.eventDescription || '',
+          start_date: event.startDate,
+          start_time: event.startTime,
+          end_date: event.endDate,
+          end_time: event.endTime,
+          venue: event.venue || 'TBD',
+          event_mode: event.eventMode || event.hackathonMode || 'Offline',
+          team_name: registrationData.teamName || 'Individual',
+          team_size: formData.teamSize || 1,
+          team_members: formData.inviteEmails.filter(email => email.trim()).join(', ') || 'Individual registration',
+          team_leader_name: registrationData.name,
+          team_leader_email: registrationData.email,
+          registration_deadline: event.registrationDeadline || 'TBD',
+          event_type: event.eventType || 'Event',
+          themes: Array.isArray(event.themes) ? event.themes.join(', ') : (event.themes || 'Open Theme'),
+          tracks: Array.isArray(event.tracks) ? event.tracks.join(', ') : (event.tracks || 'General Track'),
+          prize_details: event.prizeDetails || 'Exciting prizes await!',
+          organizer_name: event.name || 'Event Organizer',
+          organizer_email: event.email || 'contact@event.com',
+          event_code: event.eventCode || 'TBD',
+          eligibility: event.eligibility || 'Open to all eligible participants',
+          submission_guidelines: event.submissionGuidelines || 'Guidelines will be shared soon',
+          evaluation_criteria: event.evaluationCriteria || 'Creativity, Innovation, Technical Implementation'
+        };
+
+        console.log('Sending email to:', participantEmail);
+        console.log('Template params:', templateParams);
+
+        return emailjs.send(
+          emailJSConfig.serviceId,
+          emailJSConfig.templateId,
+          templateParams,
+          emailJSConfig.publicKey
+        );
+      });
+
+      await Promise.all(emailPromises);
+      console.log('All invitation emails sent successfully');
+      return true;
+    } catch (error) {
+      console.error('Error sending invitation emails:', error);
+      console.error('EmailJS Error Details:', {
+        status: error.status,
+        text: error.text,
+        message: error.message
+      });
+      return false;
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     // Ensure submission only happens when on the final allowed step
@@ -145,9 +235,32 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
         alert(`Please fix the following errors before submitting:\n- ${msgs.join('\n- ')}`);
         return;
       }
+      
+      // Submit the registration first
       onSubmit(formData);
-      // Show success message
-      alert(`Registration successful for the event: ${event.eventTitle}\n\nThank you for registering! You will receive a confirmation email shortly.`);
+      
+      // Collect all participant emails
+      const participantEmails = [formData.email]; // Always include the main registrant
+      if (isTeamEvent && formData.inviteEmails) {
+        // Add valid team member emails
+        const validTeamEmails = formData.inviteEmails.filter(email => email.trim() && /^\S+@\S+\.\S+$/.test(email));
+        participantEmails.push(...validTeamEmails);
+      }
+
+      // Send invitation emails to all participants
+      sendInvitationEmails(participantEmails, formData)
+        .then(success => {
+          if (success) {
+            alert(`Registration successful for the event: ${event.eventTitle}\n\nThank you for registering! Invitation emails have been sent to all participants.`);
+          } else {
+            alert(`Registration successful for the event: ${event.eventTitle}\n\nThank you for registering! However, there was an issue sending some invitation emails. Please contact the organizers if needed.`);
+          }
+        })
+        .catch(error => {
+          console.error('Email sending error:', error);
+          alert(`Registration successful for the event: ${event.eventTitle}\n\nThank you for registering! However, there was an issue sending invitation emails. Please contact the organizers if needed.`);
+        });
+      
       onClose(); // Close the form after successful submission
     }
   };

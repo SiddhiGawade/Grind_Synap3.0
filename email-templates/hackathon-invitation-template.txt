@@ -1,0 +1,59 @@
+🎉 YOU'RE INVITED TO {{event_name}}! 🎉
+
+Hello {{participant_name}},
+
+Congratulations! You have been successfully registered for {{event_name}}. We're excited to have you participate in this amazing {{event_type}} event!
+
+📅 EVENT DETAILS:
+• Event Name: {{event_name}}
+• Event Type: {{event_type}}
+• Start: {{event_start_date}} at {{event_start_time}}
+• End: {{event_end_date}} at {{event_end_time}}
+• Mode: {{event_mode}}
+• Venue: {{event_venue}}
+• Event Code: {{event_code}}
+
+👥 TEAM INFORMATION:
+• Team Name: {{team_name}}
+• Team Leader: {{team_leader_name}} ({{team_leader_email}})
+• Team Size: {{min_team_size}} - {{max_team_size}} members
+
+📝 IMPORTANT INFORMATION:
+• Registration Deadline: {{registration_deadline}}
+• Eligibility: {{eligibility}}
+• Themes: {{themes}}
+• Tracks: {{tracks}}
+
+📖 ABOUT THE EVENT:
+{{event_description}}
+
+🏆 PRIZE DETAILS:
+{{prize_details}}
+
+📋 SUBMISSION GUIDELINES:
+{{submission_guidelines}}
+
+⚖️ EVALUATION CRITERIA:
+{{evaluation_criteria}}
+
+📞 CONTACT INFORMATION:
+• Organizer: {{organizer_name}}
+• Email: {{organizer_email}}
+
+WHAT'S NEXT?
+• Keep an eye on your email for updates and announcements
+• Start preparing with your team
+• Join our community channels for networking
+• Bring your creativity and coding skills!
+
+If you have any questions or need assistance, please don't hesitate to reach out to us.
+
+We can't wait to see what amazing projects you'll create! Good luck and have fun! 🌟
+
+Best regards,
+{{organizer_name}}
+{{event_name}} Organizing Team
+
+---
+This email was sent because you registered for {{event_name}}. 
+If you have any questions, please contact {{organizer_email}}.

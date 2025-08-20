@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Award, Share2, X, Clock, MapPin, Users as UsersIcon, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Award, Share2, X, Clock, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Info, MessageCircle, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import EventRegistrationForm from './EventRegistrationForm.jsx';
 
 const ParticipantDashboard = () => {
   const { user, logout } = useAuth();
+  const avatarStorageKey = `selectedAvatar:${user?.email || user?.id || 'anon'}`; // Unique key for each user
   const [isProfileFormOpen, setProfileFormOpen] = useState(false);
   const [isTeamFormOpen, setTeamFormOpen] = useState(false);
-  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [selectedAvatar, setSelectedAvatar] = useState(() => {
+    try {
+      return localStorage.getItem(avatarStorageKey) || null; // Load avatar from localStorage
+    } catch {
+      return null;
+    }
+  });
   const [participantDetails, setParticipantDetails] = useState({
     name: user.name,
     institute: '',
@@ -35,7 +42,16 @@ const ParticipantDashboard = () => {
     { id: 1, name: 'Hackathon 2023 - Participant', date: '2023-11-15' },
     { id: 2, name: 'Web Development Bootcamp', date: '2023-09-22' }
   ]);
-  
+
+  const [chatMessages] = useState([
+    // Sample QnA Discussion messages
+    { id: 1, user: 'Alex Johnson', avatar: '/avatars/Avatar-1.jpg', message: 'Hey everyone! Any tips for the upcoming hackathon?', time: '2 min ago', isQuestion: true },
+    { id: 2, user: 'Sam Wilson', avatar: '/avatars/Avatar-2.jpg', message: 'Focus on problem-solving and team collaboration!', time: '1 min ago', isQuestion: false },
+    { id: 3, user: 'Jordan Lee', avatar: '/avatars/Avatar-3.png', message: 'What tech stack should we use for web development projects?', time: '5 min ago', isQuestion: true },
+    { id: 4, user: 'Taylor Smith', avatar: '/avatars/Avatar-4.png', message: 'React + Node.js is a solid choice for most projects', time: '3 min ago', isQuestion: false },
+    { id: 5, user: user.name, avatar: selectedAvatar || '/avatars/Avatar-5.png', message: 'Thanks for the advice! Looking forward to participating.', time: 'Just now', isQuestion: false }
+  ]);
+
   // Persist registered events per-user in localStorage so registrations survive page reloads
   const storageKey = `registeredEvents:${user?.email || user?.id || 'anon'}`;
   const [registeredEvents, setRegisteredEvents] = useState(() => {
@@ -119,6 +135,7 @@ const ParticipantDashboard = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isEventModalOpen, setEventModalOpen] = useState(false);
   const [isRegistrationFormOpen, setRegistrationFormOpen] = useState(false);
+  const [isXpInfoModalOpen, setXpInfoModalOpen] = useState(false);
 
   // Debug: log selectedEvent whenever the registration form opens to inspect its shape
   React.useEffect(() => {
@@ -255,7 +272,19 @@ const ParticipantDashboard = () => {
 
   const handleAvatarSelect = (avatar) => {
     setSelectedAvatar(avatar);
+    try {
+      localStorage.setItem(avatarStorageKey, avatar); // Save avatar to localStorage
+    } catch {
+      console.warn('Failed to save avatar to localStorage');
+    }
   };
+
+  useEffect(() => {
+    const savedAvatar = localStorage.getItem(avatarStorageKey);
+    if (savedAvatar) {
+      setSelectedAvatar(savedAvatar); // Restore avatar on component mount
+    }
+  }, [avatarStorageKey]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -472,7 +501,7 @@ const ParticipantDashboard = () => {
                 <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center border-2 border-themed shadow-themed">
                   <Trophy className="w-6 h-6 text-secondary" />
                 </div>
-                <h1 className="text-xl font-black text-primary">SynapHack 3.0</h1>
+                <h1 className="text-xl font-black text-primary">Eventure</h1>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
@@ -489,6 +518,108 @@ const ParticipantDashboard = () => {
             </div>
           </div>
         </header>
+
+        {/* XP Information Modal */}
+        <AnimatePresence>
+          {isXpInfoModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+              <motion.div 
+                className="bg-primary rounded-2xl border-2 border-themed w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center border-2 border-themed shadow-themed">
+                        <Trophy className="w-6 h-6 text-secondary" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-primary">XP Points System</h2>
+                    </div>
+                    <button 
+                      onClick={() => setXpInfoModalOpen(false)}
+                      className="p-1 rounded-full hover:bg-secondary transition-colors"
+                    >
+                      <X className="w-6 h-6 text-primary" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Introduction */}
+                    <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                      <h3 className="text-lg font-semibold text-primary mb-2 flex items-center gap-2">
+                        <Info className="w-5 h-5 text-accent" />
+                        How XP Points Work
+                      </h3>
+                      <p className="text-primary">
+                        Earn XP (Experience Points) by participating in events and hackathons. Your XP determines your position on the leaderboard, which updates dynamically based on your achievements.
+                      </p>
+                    </div>
+
+                    {/* XP Rewards */}
+                    <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                      <h3 className="text-lg font-semibold text-primary mb-4">XP Rewards</h3>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-primary rounded-lg border border-themed">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                              <Users className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-primary">Event Participation</p>
+                              <p className="text-sm text-primary opacity-70">Join any event or hackathon</p>
+                            </div>
+                          </div>
+                          <span className="text-xl font-bold text-accent">+20 XP</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-primary rounded-lg border border-themed">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                              <Award className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-primary">Shortlisted</p>
+                              <p className="text-sm text-primary opacity-70">Get shortlisted in an event</p>
+                            </div>
+                          </div>
+                          <span className="text-xl font-bold text-accent">+40 XP</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-primary rounded-lg border border-themed">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                              <Trophy className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-primary">Winner</p>
+                              <p className="text-sm text-primary opacity-70">Win an event or hackathon</p>
+                            </div>
+                          </div>
+                          <span className="text-xl font-bold text-accent">+100 XP</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Leaderboard Info */}
+                    <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
+                      <h3 className="text-lg font-semibold text-primary mb-2">Leaderboard</h3>
+                      <p className="text-primary mb-3">
+                        The leaderboard ranks all participants based on their total XP points and updates in real-time as you earn more points.
+                      </p>
+                      <div className="flex items-center gap-2 text-primary">
+                        <Trophy className="w-5 h-5 text-accent" />
+                        <span className="text-sm">Compete with other participants and climb to the top!</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Event Details Modal */}
         <AnimatePresence>
@@ -934,6 +1065,7 @@ const ParticipantDashboard = () => {
              </div>
           </motion.div>
 
+
           {/* Quick Actions */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
@@ -942,6 +1074,131 @@ const ParticipantDashboard = () => {
                 <button onClick={() => setRegistrationFormOpen(true)} className="btn-primary px-4 py-2 rounded-lg w-full">Register for an Event</button>
                 <button onClick={() => setProjectModalOpen(true)} className="btn-secondary px-4 py-2 rounded-lg w-full">Submit Project</button>
                 <button onClick={() => setProfileFormOpen(true)} className="btn-secondary px-4 py-2 rounded-lg w-full">Edit Profile</button>
+=======
+          {/* QnA Discussion & Leaderboard */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* QnA Discussion Chat */}
+            <motion.div
+              className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-primary flex items-center gap-2">
+                  <MessageCircle className="w-5 h-5 text-accent" />
+                  QnA Discussion 💬
+                </h3>
+                <span className="text-xs text-primary opacity-60">Live Chat</span>
+              </div>
+              
+              {/* Chat Messages Container */}
+              <div className="h-80 overflow-y-auto mb-4 space-y-3 pr-2">
+                {chatMessages.map((message, index) => (
+                  <motion.div
+                    key={message.id}
+                    className={`flex gap-3 ${message.user === user.name ? 'justify-end' : 'justify-start'}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.1 * index }}
+                  >
+                    {message.user !== user.name && (
+                      <img 
+                        src={message.avatar} 
+                        alt={message.user} 
+                        className="w-8 h-8 rounded-full flex-shrink-0"
+                      />
+                    )}
+                    <div className={`max-w-[75%] ${message.user === user.name ? 'order-first' : ''}`}>
+                      <div className={`p-3 rounded-lg border border-themed ${
+                        message.user === user.name 
+                          ? 'bg-accent text-secondary' 
+                          : message.isQuestion 
+                            ? 'bg-yellow-100 border-yellow-300' 
+                            : 'bg-primary'
+                      }`}>
+                        {message.user !== user.name && (
+                          <p className="text-xs font-medium text-primary opacity-70 mb-1">
+                            {message.user}
+                            {message.isQuestion && <span className="ml-1 text-yellow-600">❓</span>}
+                          </p>
+                        )}
+                        <p className={`text-sm ${message.user === user.name ? 'text-secondary' : 'text-primary'}`}>
+                          {message.message}
+                        </p>
+                        <p className={`text-xs mt-1 opacity-60 ${message.user === user.name ? 'text-secondary' : 'text-primary'}`}>
+                          {message.time}
+                        </p>
+                      </div>
+                    </div>
+                    {message.user === user.name && (
+                      <img 
+                        src={message.avatar} 
+                        alt={message.user} 
+                        className="w-8 h-8 rounded-full flex-shrink-0"
+                      />
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Chat Input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Ask a question or share your thoughts..."
+                  className="flex-1 px-3 py-2 text-sm border-2 border-themed rounded-lg bg-primary text-primary focus:outline-none focus:border-accent"
+                  disabled
+                />
+                <button
+                  className="p-2 bg-accent text-secondary rounded-lg border-2 border-themed hover:bg-accent/80 transition-colors"
+                  disabled
+                  title="Chat functionality coming soon"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <p className="text-xs text-primary opacity-50 mt-2 text-center">
+                💡 Static demo - Full chat functionality coming soon!
+              </p>
+            </motion.div>
+
+            {/* Leaderboard */}
+            <motion.div
+              className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.6 }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-primary">Leaderboard 🏆</h3>
+                <button
+                  onClick={() => setXpInfoModalOpen(true)}
+                  className="p-2 rounded-full hover:bg-secondary transition-colors group"
+                  title="Learn about XP points"
+                >
+                  <Info className="w-5 h-5 text-primary group-hover:text-accent transition-colors" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                {leaderboardData.map((user, index) => (
+                  <motion.div
+                    key={user.id}
+                    className={`flex items-center p-3 rounded-lg border border-themed transition-all ${
+                      index < 5 ? 'bg-secondary scale-105' : 'bg-primary'
+                    }`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.1 * index }}
+                  >
+                    <span className="font-bold text-lg w-6 text-center text-primary">{user.rank}.</span>
+                    <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full ml-2" />
+                    <p className="font-medium text-primary flex-grow ml-3">{user.name}</p>
+                    <p className="text-sm text-primary opacity-60">{user.xp} XP</p>
+                  </motion.div>
+                ))}
+
               </div>
             </div>
           </div>

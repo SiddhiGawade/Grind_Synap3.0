@@ -92,11 +92,9 @@ const SignupPage = ({ onNavigate }) => {
         <div className="relative w-full max-w-md">
           <div className="form-container p-8 rounded-2xl border-2 shadow-themed-xl">
             {/* Header */}
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center border-2 border-themed shadow-themed-lg mx-auto mb-4">
-                <Trophy className="w-8 h-8 text-secondary" />
-              </div>
-              <h1 className="text-2xl font-black text-primary mb-2">Join SynapHack 3.0</h1>
+            <div className="text-center mb-2">
+            
+              <h1 className="text-2xl font-black text-primary mb-2">Join Eventure</h1>
               <p className="text-primary opacity-70">Create your account to start your journey</p>
             </div>
 
