@@ -6,9 +6,16 @@ import EventRegistrationForm from './EventRegistrationForm.jsx';
 
 const ParticipantDashboard = () => {
   const { user, logout } = useAuth();
+  const avatarStorageKey = `selectedAvatar:${user?.email || user?.id || 'anon'}`; // Unique key for each user
   const [isProfileFormOpen, setProfileFormOpen] = useState(false);
   const [isTeamFormOpen, setTeamFormOpen] = useState(false);
-  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [selectedAvatar, setSelectedAvatar] = useState(() => {
+    try {
+      return localStorage.getItem(avatarStorageKey) || null; // Load avatar from localStorage
+    } catch {
+      return null;
+    }
+  });
   const [participantDetails, setParticipantDetails] = useState({
     name: user.name,
     institute: '',
@@ -262,7 +269,19 @@ const ParticipantDashboard = () => {
 
   const handleAvatarSelect = (avatar) => {
     setSelectedAvatar(avatar);
+    try {
+      localStorage.setItem(avatarStorageKey, avatar); // Save avatar to localStorage
+    } catch {
+      console.warn('Failed to save avatar to localStorage');
+    }
   };
+
+  useEffect(() => {
+    const savedAvatar = localStorage.getItem(avatarStorageKey);
+    if (savedAvatar) {
+      setSelectedAvatar(savedAvatar); // Restore avatar on component mount
+    }
+  }, [avatarStorageKey]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
