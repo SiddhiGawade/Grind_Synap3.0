@@ -43,8 +43,69 @@ const ParticipantDashboard = () => {
     { id: 2, name: 'Web Development Bootcamp', date: '2023-09-22' }
   ]);
   
-  // State to track registered events
-  const [registeredEvents, setRegisteredEvents] = useState([]);
+  // Persist registered events per-user in localStorage so registrations survive page reloads
+  const storageKey = `registeredEvents:${user?.email || user?.id || 'anon'}`;
+  const [registeredEvents, setRegisteredEvents] = useState(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Save registered events to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(registeredEvents));
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [registeredEvents, storageKey]);
+
+  // Try to load registrations from backend (server-side persistence) and merge with localStorage
+  useEffect(() => {
+    let mounted = true;
+    const fetchRegistrations = async () => {
+      if (!user || !user.email) return;
+      try {
+        const url = `/api/registrations?email=${encodeURIComponent(user.email)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch registrations');
+        const data = await res.json();
+        if (!mounted || !Array.isArray(data)) return;
+
+        const mapped = data.map(r => {
+          const id = r.event_id || r.eventId || r.eventCode || r.event_code || `event-${r.id || Date.now()}`;
+          const title = r.event_title || r.eventTitle || r.event_code || r.eventCode || `Event ${id}`;
+          return {
+            id,
+            eventTitle: title,
+            startDate: r.start_date || r.startDate || '',
+            endDate: r.end_date || r.endDate || '',
+            registrationDate: r.created_at || r.createdAt || new Date().toISOString(),
+            teamInfo: r.team_name ? { teamName: r.team_name } : null,
+            status: 'Upcoming'
+          };
+        });
+
+        // Merge with existing local registeredEvents, dedupe by id
+        const existing = Array.isArray(registeredEvents) ? registeredEvents : [];
+        const mapById = new Map();
+        for (const e of existing) mapById.set(String(e.id), e);
+        for (const m of mapped) {
+          if (!mapById.has(String(m.id))) mapById.set(String(m.id), m);
+        }
+        const merged = Array.from(mapById.values());
+        setRegisteredEvents(merged);
+      } catch (err) {
+        // ignore - keep localStorage data
+        console.warn('Could not load server registrations, using local data', err);
+      }
+    };
+    fetchRegistrations();
+    return () => { mounted = false; };
+  }, [user]);
 
   const avatars = [
     '/avatars/Avatar-1.jpg',
@@ -67,10 +128,11 @@ const ParticipantDashboard = () => {
   const [isRegistrationFormOpen, setRegistrationFormOpen] = useState(false);
   const [isProjectModalOpen, setProjectModalOpen] = useState(false);
   const [projectForm, setProjectForm] = useState({
+    eventId: '',
     eventName: '',
     teamName: '',
     githubLink: '',
-    projectDescription: ''
+    projectName: ''
   });
 
   // Helper function to determine if an event is a team event
@@ -229,7 +291,7 @@ const ParticipantDashboard = () => {
       status: new Date() < new Date(eventData.startDate || eventData.start_date || new Date()) ? 'Upcoming' : 'Active'
     };
     
-    setRegisteredEvents(prev => [...prev, newRegisteredEvent]);
+  setRegisteredEvents(prev => [...prev, newRegisteredEvent]);
     
     // Update stats
     setStats(prev => ({
@@ -242,6 +304,29 @@ const ParticipantDashboard = () => {
     
     // Show success message
     alert(`Successfully registered for ${newRegisteredEvent.eventTitle}!`);
+
+    // Persist registration to backend (if available). If it fails, we keep local copy.
+    (async () => {
+      try {
+        const endpointId = eventData.id || eventData.eventCode || newRegisteredEvent.id;
+        const res = await fetch(`/api/events/${encodeURIComponent(endpointId)}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registrantEmail: user.email, registrantName: user.name, teamName: teamInfo?.teamName || null, registrants: teamInfo?.members || null })
+        });
+        if (!res.ok) {
+          console.warn('Server registration failed', await res.text());
+          return;
+        }
+        const body = await res.json();
+        // Optionally update local registration with server ids if returned
+        if (Array.isArray(body.registrations) && body.registrations.length > 0) {
+          // map server rows to local registered event entries (no change needed for now)
+        }
+      } catch (err) {
+        console.warn('Server registration error', err);
+      }
+    })();
   };
 
   const handleSaveProfile = (e) => {
@@ -269,19 +354,68 @@ const ParticipantDashboard = () => {
     }));
   };
 
-  const handleProjectSubmit = (e) => {
+  // Open the project modal and prefill event id and title
+  const handleOpenProjectModal = (eventId, eventTitle) => {
+    // Check if user is registered for this event
+    const isRegistered = registeredEvents.some(
+      event => (event.id === eventId) || 
+               (event.eventTitle === eventTitle) ||
+               (event.eventId === eventId)
+    );
+    
+    if (!isRegistered) {
+      alert('You must register for this event before submitting a project. Please register first.');
+      return;
+    }
+    
+    setProjectForm(prev => ({
+      ...prev,
+      eventId: eventId || prev.eventId || '',
+      eventName: eventTitle || prev.eventName || ''
+    }));
+    setProjectModalOpen(true);
+  };
+  
+  const handleProjectSubmit = async (e) => {
     e.preventDefault();
-    // Here you would typically send the project details to your backend
-    console.log('Project submitted:', projectForm);
-    alert('Project submitted successfully!');
-    setProjectModalOpen(false);
-    // Reset form
-    setProjectForm({
-      eventName: projectForm.eventName, // Keep the event name
-      teamName: '',
-      githubLink: '',
-      projectDescription: ''
-    });
+    // Submit project to backend with event id and title
+    const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+    const eventId = projectForm.eventId || selectedEvent?.id || '';
+    if (!eventId) {
+      alert('Missing event id — cannot submit project. Open the submit modal from the registered event or select an event first.');
+      return;
+    }
+
+    const payload = {
+      teamName: projectForm.teamName,
+      submitterName: user?.name || '',
+      submitterEmail: user?.email || '',
+      link: projectForm.githubLink,
+      files: [],
+      project_name: projectForm.projectName,
+      event_title: projectForm.eventName || selectedEvent?.eventTitle || selectedEvent?.title || ''
+    };
+
+    const url = `${apiBase.replace(/\/$/, '')}/api/events/${encodeURIComponent(eventId)}/submissions`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+      const data = await res.json();
+      console.log('Submission response:', data);
+      alert('Project submitted successfully!');
+      setProjectModalOpen(false);
+      setProjectForm({ eventId: '', eventName: '', teamName: '', githubLink: '', projectName: '' });
+    } catch (err) {
+      console.error('Failed to submit project', err);
+      alert('Failed to submit project: ' + (err.message || err));
+    }
   };
 
   useEffect(() => {
@@ -725,121 +859,79 @@ const ParticipantDashboard = () => {
                   const status = isUpcoming ? 'Upcoming' : isActive ? 'Active' : 'Ended';
                   const statusColor = isUpcoming ? 'bg-blue-200 text-blue-800' : 
                                      isActive ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-800';
-                  
+                  const title = event.eventTitle || event.title || event.name || 'Untitled Event';
+                  const id = event.id || event.eventId || event.event_code || event.eventCode || '';
                   return (
-                    <div key={event.id} className="p-4 bg-secondary rounded-lg border-2 border-themed">
-                      <h4 className="font-bold text-primary">{event.eventTitle}</h4>
-                      {event.teamInfo && (
-                        <p className="text-sm text-primary opacity-70 mb-2">
-                          {event.teamInfo.teamName ? `Team: ${event.teamInfo.teamName}` : 'Individual Registration'}
-                        </p>
-                      )}
-                      <p className="text-xs text-primary opacity-70 mb-3">
-                        {new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()}
-                      </p>
-                      <div className="flex justify-between items-center">
-                        <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
-                          {status}
-                        </span>
-                        {isActive && (
-                          <button 
-                            onClick={() => {
-                              setProjectForm(prev => ({
-                                ...prev,
-                                eventName: event.eventTitle,
-                                teamName: event.teamInfo?.teamName || ''
-                              }));
-                              setProjectModalOpen(true);
-                            }}
-                            className="btn-primary px-3 py-1 text-xs rounded-lg border-2 font-medium"
+                    <div key={id || title} className="p-4 bg-secondary rounded-lg border border-themed">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-bold text-primary">{title}</h4>
+                          <p className="text-sm text-primary opacity-70">{formatDate(event.startDate)} - {formatDate(event.endDate)}</p>
+                          <span className={`inline-block px-2 py-1 mt-2 text-xs rounded-full ${statusColor}`}>{status}</span>
+                        </div>
+                        <div>
+                          <button
+                            onClick={() => handleOpenProjectModal(id, title)}
+                            className="btn-primary px-4 py-2 rounded-lg border-2"
                           >
                             Submit Project
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+               )}
+             </div>
+
+             <h3 className="text-lg font-bold text-primary mb-6">Current Events</h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+               {eventsLoading ? (
+                 <div className="col-span-3 text-primary opacity-70">Loading events...</div>
+               ) : events.length === 0 ? (
+                 <div className="col-span-3 text-primary opacity-60">No active events yet.</div>
+               ) : (
+                events.map((ev) => {
+                  const evId = getEventField(ev, 'id', 'event_id') || ev.eventCode || ev.event_code || '';
+                  const evTitle = getEventField(ev, 'eventTitle', 'title', 'name') || 'Untitled Event';
+                  const isRegistered = registeredEvents.some(
+                    event => (event.id === evId) || 
+                             (event.eventTitle === evTitle) ||
+                             (event.eventId === evId)
+                  );
+                  
+                  return (
+                    <div key={evId || evTitle} className="p-4 bg-secondary rounded-lg border border-themed">
+                      <h4 className="font-bold text-primary mb-1">{evTitle}</h4>
+                      <p className="text-sm text-primary opacity-70 mb-3">{formatDate(getEventField(ev, 'startDate', 'start_date'))} — {formatDate(getEventField(ev, 'endDate', 'end_date'))}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setSelectedEvent(ev); setEventModalOpen(true); }}
+                          className="btn-secondary px-4 py-2 rounded-lg border-2"
+                        >
+                          View
+                        </button>
+                        {isRegistered ? (
+                          <button
+                            onClick={() => handleOpenProjectModal(evId, evTitle)}
+                            className="btn-primary px-4 py-2 rounded-lg border-2"
+                          >
+                            Submit Project
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => { setSelectedEvent(ev); setEventModalOpen(true); }}
+                            className="btn-primary px-4 py-2 rounded-lg border-2"
+                          >
+                            Register
                           </button>
                         )}
                       </div>
                     </div>
                   );
                 })
-              )}
-            </div>
-
-            <h3 className="text-lg font-bold text-primary mb-6">Current Events</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {eventsLoading ? (
-                <div className="col-span-3 text-primary opacity-70">Loading events...</div>
-              ) : events.length === 0 ? (
-                <div className="col-span-3 text-primary opacity-60">No active events yet.</div>
-              ) : (
-                events.map((ev) => {
-                  // Calculate event status based on dates
-                  const today = new Date();
-                  const startDate = new Date(ev.startDate);
-                  const endDate = new Date(ev.endDate);
-                  
-                  let eventStatus = 'Active';
-                  let statusColor = 'bg-green-200 text-green-800';
-                  let timeInfo = '';
-                  
-                  if (today < startDate) {
-                    eventStatus = 'Upcoming';
-                    statusColor = 'bg-blue-200 text-blue-800';
-                    const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
-                    timeInfo = `Starts in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
-                  } else if (today > endDate) {
-                    eventStatus = 'Ended';
-                    statusColor = 'bg-gray-200 text-gray-800';
-                    timeInfo = 'Event ended';
-                  } else {
-                    eventStatus = 'Active';
-                    statusColor = 'bg-green-200 text-green-800';
-                    const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-                    timeInfo = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
-                  }
-                  
-                  return (
-                    <div
-                      key={ev.id || ev.eventCode || ev.event_code}
-                      className={`p-4 rounded-lg border-2 border-themed ${eventStatus === 'Ended' ? 'bg-gray-100 opacity-75' : 'bg-secondary'}`}
-                    >
-                      <h4 className="font-bold text-primary">
-                        {ev.eventTitle || ev.title || ev.name || 'Untitled Event'}
-                      </h4>
-                      {ev.eventDescription && (
-                        <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>
-                      )}
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
-                          {eventStatus}
-                        </span>
-                        <span className="text-xs text-primary opacity-60">{timeInfo}</span>
-                      </div>
-                      <div className="text-xs text-primary opacity-50 mb-3">
-                        {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-primary opacity-60">
-                          Code: {ev.eventCode || ev.event_code}
-                        </span>
-                        <button
-                          className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
-                          disabled={eventStatus === 'Ended'}
-                          onClick={() => {
-                            const eventWithTeamInfo = {
-                              ...ev,
-                              teamEvent: isTeamEvent(ev)
-                            };
-                            setSelectedEvent(eventWithTeamInfo);
-                            setEventModalOpen(true);
-                          }}
-                        >
-                          {eventStatus === 'Ended' ? 'Ended' : 'Register'}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
+               )}
+             </div>
           </motion.div>
 
           {/* Quick Actions & Leaderboard */}
@@ -1044,10 +1136,25 @@ const ParticipantDashboard = () => {
               event={selectedEvent}
               onClose={() => setRegistrationFormOpen(false)}
               onSubmit={(formData) => {
-                // Handle form submission and add to registered events
-                handleEventRegistration(selectedEvent, formData.teamName ? { teamName: formData.teamName } : null);
-                console.log('Registration form submitted:', formData);
-                // Here you would typically send the data to your backend
+                // Build registrants array: include the submitter plus any invited emails
+                const registrants = [];
+                // include the person filling the form
+                if (formData.name || formData.email) {
+                  registrants.push({ name: formData.name || null, email: (formData.email || '').toLowerCase(), metadata: { phone: formData.phone || null, college: formData.college || null } });
+                }
+                // include invited emails (no names entered)
+                if (Array.isArray(formData.inviteEmails)) {
+                  formData.inviteEmails.forEach(e => {
+                    if (e && String(e).trim()) registrants.push({ name: null, email: String(e).toLowerCase(), metadata: null });
+                  });
+                }
+
+                const teamInfo = formData.teamName ? { teamName: formData.teamName, members: registrants } : null;
+
+                // Handle form submission and add to registered events (local UI)
+                handleEventRegistration(selectedEvent, teamInfo);
+                console.log('Registration form submitted:', formData, ' -> registrants:', registrants);
+                // Notify user and close modal
                 alert(`Successfully registered for: ${selectedEvent.eventTitle}`);
                 setRegistrationFormOpen(false);
               }}
