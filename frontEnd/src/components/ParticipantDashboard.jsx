@@ -126,6 +126,13 @@ const ParticipantDashboard = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isEventModalOpen, setEventModalOpen] = useState(false);
   const [isRegistrationFormOpen, setRegistrationFormOpen] = useState(false);
+
+  // Debug: log selectedEvent whenever the registration form opens to inspect its shape
+  React.useEffect(() => {
+    if (isRegistrationFormOpen && selectedEvent) {
+      console.log('Opening registration for selectedEvent:', selectedEvent);
+    }
+  }, [isRegistrationFormOpen, selectedEvent]);
   const [isProjectModalOpen, setProjectModalOpen] = useState(false);
   const [projectForm, setProjectForm] = useState({
     eventId: '',
