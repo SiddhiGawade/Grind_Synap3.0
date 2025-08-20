@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Trash2, Send } from 'lucide-react';
+import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Trash2, Send, Eye, X } from 'lucide-react';
 import CreateEventWizard from './CreateEventWizard.jsx';
+import Leaderboard from './Leaderboard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const CreatorDashboard = () => {
@@ -12,6 +13,8 @@ const CreatorDashboard = () => {
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState(null);
   const [announcementInputs, setAnnouncementInputs] = useState({});
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [selectedEventForLeaderboard, setSelectedEventForLeaderboard] = useState(null);
 
   const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
@@ -272,8 +275,13 @@ const CreatorDashboard = () => {
                           <img src={ev.image_url || ev.imageUrl || ''} alt={ev.eventTitle || ev.title || 'Event image'} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
                         </div>
 
-                        <div className="p-4">
-                          <h4 className="font-bold text-primary">{ev.eventTitle || ev.title || ev.name || 'Untitled Event'}</h4>
+                        <div className="p-4 relative">
+                          <div className="absolute top-2 right-2">
+                            <button onClick={async () => { if (!confirm('Delete this event?')) return; try { const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'; const res = await fetch(`${API_BASE}/api/events/${ev.id}`, { method: 'DELETE' }); if (!res.ok) throw new Error('Delete failed'); await fetchEvents(); } catch (err) { alert(err.message || 'Delete failed'); } }} className="p-1 rounded-full hover:bg-red-100 transition-colors" title="Delete Event">
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </button>
+                          </div>
+                          <h4 className="font-bold text-primary pr-8">{ev.eventTitle || ev.title || ev.name || 'Untitled Event'}</h4>
                           {ev.eventDescription && <p className="text-primary opacity-70 text-sm mb-2">{ev.eventDescription}</p>}
                           <div className="flex items-center justify-between mb-2">
                             <span className={`text-xs px-2 py-1 rounded-full ${status === 'Ended' ? 'bg-gray-200 text-gray-800' : status === 'Upcoming' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'}`}>{status}</span>
@@ -282,8 +290,11 @@ const CreatorDashboard = () => {
                           <div className="flex justify-between items-center">
                             <span className="text-xs text-primary opacity-60">Code: {ev.eventCode || ev.event_code}</span>
                             <div className="flex items-center gap-2">
-                              <button onClick={() => { setEditingEvent(ev); setShowWizard(true); }} className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium">Edit</button>
-                              <button onClick={async () => { if (!confirm('Delete this event?')) return; try { const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'; const res = await fetch(`${API_BASE}/api/events/${ev.id}`, { method: 'DELETE' }); if (!res.ok) throw new Error('Delete failed'); await fetchEvents(); } catch (err) { alert(err.message || 'Delete failed'); } }} className="btn-delete px-3 py-1 rounded">Delete</button>
+                              <button onClick={() => { setEditingEvent(ev); setShowWizard(true); }} className="btn-primary px-3 py-1.5 rounded-lg border-2 text-xs font-medium cursor-pointer">Edit</button>
+                              <button onClick={() => { setSelectedEventForLeaderboard(ev); setShowLeaderboard(true); }} className="btn-primary text-white px-3 py-1.5 rounded-lg border-2 text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1 cursor-pointer">
+                                <Eye className="w-3 h-3" />
+                                Review Result
+                              </button>
                             </div>
                           </div>
 
@@ -353,6 +364,17 @@ const CreatorDashboard = () => {
           />
         )}
 
+        {/* Leaderboard modal */}
+        {showLeaderboard && selectedEventForLeaderboard && (
+          <Leaderboard
+            event={selectedEventForLeaderboard}
+            onClose={() => {
+              setShowLeaderboard(false);
+              setSelectedEventForLeaderboard(null);
+            }}
+          />
+        )}
+
         {/* Manage events modal */}
         {manageOpen && (
           <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -387,8 +409,13 @@ const CreatorDashboard = () => {
                         />
                       </div>
 
-                      <div className="p-4">
-                        <div className="flex items-center justify-between mb-2">
+                      <div className="p-4 relative">
+                        <div className="absolute top-2 right-2">
+                          <button onClick={async () => { if (!confirm('Delete this event?')) return; try { const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'; const res = await fetch(`${API_BASE}/api/events/${ev.id}`, { method: 'DELETE' }); if (!res.ok) throw new Error('Delete failed'); await fetchEvents(); } catch (err) { alert(err.message || 'Delete failed'); } }} className="p-1 rounded-full hover:bg-red-100 transition-colors" title="Delete Event">
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between mb-2 pr-8">
                           <div>
                             <div className="font-semibold text-primary">{ev.eventTitle || '(Untitled)'}</div>
                             <div className="text-sm text-primary opacity-70">{ev.name} • {ev.email}</div>
@@ -399,6 +426,10 @@ const CreatorDashboard = () => {
                               className="btn-primary px-3 py-1 rounded"
                             >
                               Edit
+                            </button>
+                            <button onClick={() => { setSelectedEventForLeaderboard(ev); setShowLeaderboard(true); }} className="bg-blue-500 text-white px-3 py-1 rounded border-2 text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1">
+                              <Eye className="w-3 h-3" />
+                              Review Result
                             </button>
                           </div>
                         </div>
