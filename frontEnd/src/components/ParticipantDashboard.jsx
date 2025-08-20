@@ -37,7 +37,13 @@ const ParticipantDashboard = () => {
     '/avatars/Avatar-1.jpg',
     '/avatars/Avatar-2.jpg',
     '/avatars/Avatar-3.png',
-    '/avatars/Avatar-2.jpg',
+    '/avatars/Avatar-4.png',
+    '/avatars/Avatar-5.png',
+    '/avatars/Avatar-6.png',
+    '/avatars/Avatar-7.png',
+    '/avatars/Avatar-10.png',
+    '/avatars/Avatar-11.png',
+    '/avatars/Avatar-12.png'
   ];
 
   // Events loaded from backend for participants to register
