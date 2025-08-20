@@ -24,6 +24,19 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
   
   const [errors, setErrors] = useState({});
 
+  // Determine whether this event requires a team flow. Use event fields
+  // (eventType, minTeamSize, maxTeamSize) rather than expecting a teamEvent boolean
+  const isTeamEvent = Boolean(
+    event && (
+      event.eventType === 'hackathon' ||
+      (event.minTeamSize && Number(event.minTeamSize) > 1) ||
+      (event.maxTeamSize && Number(event.maxTeamSize) > 1)
+    )
+  );
+
+  // Determine maximum step (3 for individual events, 4 when team step is needed)
+  const maxStep = isTeamEvent ? 4 : 3;
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData({
@@ -58,8 +71,15 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
   };
 
   const validateStep = (stepNumber) => {
+    // keep legacy API: set state and return boolean, but compute via pure helper
+    const newErrors = getValidationErrors(stepNumber);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Pure helper: compute validation errors synchronously without touching state
+  function getValidationErrors(stepNumber) {
     const newErrors = {};
-    
     if (stepNumber === 1) {
       if (!formData.name.trim()) newErrors.name = 'Name is required';
       if (!formData.email.trim()) newErrors.email = 'Email is required';
@@ -68,8 +88,8 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
       else if (!/^\d{10}$/.test(formData.phone)) newErrors.phone = 'Phone number must be 10 digits';
       if (!formData.college.trim()) newErrors.college = 'College/Institution is required';
     }
-    
-    if (stepNumber === 2 && event.teamEvent) {
+
+    if (stepNumber === 2 && isTeamEvent) {
       if (!formData.teamName.trim()) newErrors.teamName = 'Team name is required';
       if (formData.teamSize < 1) newErrors.teamSize = 'Team size must be at least 1';
       if (event.minTeamSize && formData.teamSize < event.minTeamSize) {
@@ -80,7 +100,7 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
       } else if (event.maxTeamSize && formData.teamSize > event.maxTeamSize) {
         newErrors.teamSize = `Team size cannot exceed ${event.maxTeamSize}`;
       }
-      
+
       // Validate invite emails
       formData.inviteEmails.forEach((email, index) => {
         if (email.trim() && !/^\S+@\S+\.\S+$/.test(email)) {
@@ -88,22 +108,21 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
         }
       });
     }
-    
+
     if (stepNumber === 3) {
       if (!formData.tshirtSize) newErrors.tshirtSize = 'T-shirt size is required';
     }
-    
+
     if (stepNumber === 4) {
       if (!formData.agreeToTerms) newErrors.agreeToTerms = 'You must agree to the terms';
     }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+
+    return newErrors;
+  }
 
   const handleNext = () => {
     if (validateStep(step)) {
-      setStep(step + 1);
+      setStep(prev => Math.min(prev + 1, maxStep));
     }
   };
 
@@ -113,7 +132,19 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (step === 4 && validateStep(step)) { // Ensure submission only happens after step 4
+    // Ensure submission only happens when on the final allowed step
+    if (step === maxStep) {
+      // Compute errors synchronously so the alert displays the right messages
+      const syncErrors = getValidationErrors(step);
+      const ok = Object.keys(syncErrors).length === 0;
+      // Update state as well to show inline field errors
+      setErrors(syncErrors);
+      if (!ok) {
+        console.warn('Validation failed on submit', syncErrors);
+        const msgs = Object.values(syncErrors).filter(Boolean);
+        alert(`Please fix the following errors before submitting:\n- ${msgs.join('\n- ')}`);
+        return;
+      }
       onSubmit(formData);
       // Show success message
       alert(`Registration successful for the event: ${event.eventTitle}\n\nThank you for registering! You will receive a confirmation email shortly.`);
@@ -324,7 +355,7 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
           </div>
         </div>
         
-        {event.teamEvent && (
+  {isTeamEvent && (
           <div className="bg-secondary/20 p-4 rounded-lg border border-themed">
             <h4 className="font-semibold text-primary mb-2">Team Details</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
@@ -396,7 +427,7 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
     }
   };
 
-  const maxStep = event.teamEvent ? 4 : 3;
+  // removed duplicate declaration (computed earlier)
 
   return (
     <motion.div 
@@ -465,7 +496,7 @@ const EventRegistrationForm = ({ event, onClose, onSubmit, currentStep = 1 }) =>
               </button>
             )}
             
-            {step < 4 ? (
+            {step < maxStep ? (
               <button 
                 type="button" 
                 onClick={handleNext}
