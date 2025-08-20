@@ -1037,6 +1037,44 @@ app.delete('/api/events/:id/announcements/:aid', async (req, res) => {
   }
 });
 
+
+// ... (all your existing code and API endpoints above)
+
+/**
+ * Send emails to judges (alternative server-side approach)
+ * This endpoint does not send actual emails by default, but is ready for integration.
+ */
+app.post('/api/send-judge-emails', async (req, res) => {
+  try {
+    const { judges, eventCode, eventDetails } = req.body || {};
+    
+    if (!judges || !Array.isArray(judges) || judges.length === 0) {
+      return res.status(400).json({ error: 'No judges provided' });
+    }
+    if (!eventCode || !eventDetails) {
+      return res.status(400).json({ error: 'Missing event code or event details' });
+    }
+
+    // If you want to send emails server-side, implement here using Nodemailer, SendGrid, etc.
+    console.log('Email sending requested for judges:', judges);
+    console.log('Event code:', eventCode);
+    console.log('Event details:', eventDetails);
+
+    // For now, just respond with success so frontend can proceed
+    return res.json({ 
+      message: 'Email sending initiated',
+      count: judges.length 
+    });
+
+  } catch (err) {
+    console.error('Send judge emails error', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ... (make sure this endpoint is above your app.listen line)
+
+// Start the server
 app.listen(PORT, () => {
-  console.log(`Auth server listening on http://localhost:${PORT}`);
+  console.log(`Server listening on http://localhost:${PORT}`);
 });
