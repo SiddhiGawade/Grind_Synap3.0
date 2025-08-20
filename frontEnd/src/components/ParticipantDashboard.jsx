@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Users, FileText, Trophy, LogOut, Plus, Edit, Award, Share2, X, Clock, MapPin, Users as UsersIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -6,6 +7,7 @@ import EventRegistrationForm from './EventRegistrationForm.jsx';
 
 const ParticipantDashboard = () => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [isProfileFormOpen, setProfileFormOpen] = useState(false);
   const [isTeamFormOpen, setTeamFormOpen] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
@@ -502,10 +504,7 @@ const ParticipantDashboard = () => {
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-3 pt-4">
                       <button
-                        onClick={() => {
-                          setEventModalOpen(false);
-                          setRegistrationFormOpen(true);
-                        }}
+                        onClick={() => navigate('/event', { state: selectedEvent })}
                         className="btn-primary px-6 py-3 rounded-lg border-2 font-medium flex-1 flex items-center justify-center gap-2 text-lg"
                       >
                         <Plus className="w-6 h-6" />
@@ -684,16 +683,9 @@ const ParticipantDashboard = () => {
                           Code: {ev.eventCode || ev.event_code}
                         </span>
                         <button
+                          onClick={() => navigate('/event', { state: ev })}
                           className="btn-primary px-3 py-1 rounded-lg border-2 text-xs font-medium"
                           disabled={eventStatus === 'Ended'}
-                          onClick={() => {
-                            const eventWithTeamInfo = {
-                              ...ev,
-                              teamEvent: isTeamEvent(ev)
-                            };
-                            setSelectedEvent(eventWithTeamInfo);
-                            setEventModalOpen(true);
-                          }}
                         >
                           {eventStatus === 'Ended' ? 'Ended' : 'Register'}
                         </button>
