@@ -28,14 +28,7 @@ const ParticipantDashboard = () => {
     teamMembers: 0
   });
 
-  const [leaderboardData, setLeaderboardData] = useState([
-    // Sample leaderboard data
-    { id: 1, name: 'Alex Johnson', avatar: '/avatars/Avatar-1.jpg', xp: 1250, rank: 1 },
-    { id: 2, name: 'Sam Wilson', avatar: '/avatars/Avatar-2.jpg', xp: 980, rank: 2 },
-    { id: 3, name: 'Jordan Lee', avatar: '/avatars/Avatar-3.png', xp: 875, rank: 3 },
-    { id: 4, name: 'Taylor Smith', avatar: '/avatars/Avatar-4.png', xp: 760, rank: 4 },
-    { id: 5, name: user.name, avatar: selectedAvatar || '/avatars/Avatar-5.png', xp: 650, rank: 5 }
-  ]);
+  // Participant leaderboard removed; visible only to organizers and judges
 
   const [certificates, setCertificates] = useState([
     // Sample certificates data
@@ -941,37 +934,16 @@ const ParticipantDashboard = () => {
              </div>
           </motion.div>
 
-          {/* Quick Actions & Leaderboard */}
+          {/* Quick Actions */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* Quick Actions */}
- 
-            {/* Leaderboard */}
-            <motion.div
-              className="dashboard-card-white p-6 rounded-2xl border-2 border-themed"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.6 }}
-            >
-              <h3 className="text-lg font-bold text-primary mb-4">Leaderboard 🏆</h3>
+            <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
+              <h3 className="text-lg font-bold text-primary mb-4">Quick Actions</h3>
               <div className="space-y-3">
-                {leaderboardData.map((user, index) => (
-                  <motion.div
-                    key={user.id}
-                    className={`flex items-center p-3 rounded-lg border border-themed transition-all ${
-                      index < 3 ? 'bg-secondary scale-105' : 'bg-primary'
-                    }`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.1 * index }}
-                  >
-                    <span className="font-bold text-lg w-6 text-center text-primary">{user.rank}.</span>
-                    <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full ml-2" />
-                    <p className="font-medium text-primary flex-grow ml-3">{user.name}</p>
-                    <p className="text-sm text-primary opacity-60">{user.xp} XP</p>
-                  </motion.div>
-                ))}
+                <button onClick={() => setRegistrationFormOpen(true)} className="btn-primary px-4 py-2 rounded-lg w-full">Register for an Event</button>
+                <button onClick={() => setProjectModalOpen(true)} className="btn-secondary px-4 py-2 rounded-lg w-full">Submit Project</button>
+                <button onClick={() => setProfileFormOpen(true)} className="btn-secondary px-4 py-2 rounded-lg w-full">Edit Profile</button>
               </div>
-            </motion.div>
+            </div>
           </div>
 
           {/* Certificates Section */}

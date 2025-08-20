@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, FileText, Trophy, BarChart3, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import EvaluateCandidates from './EvaluateCandidates.jsx';
+import Leaderboard from './Leaderboard.jsx';
 
 const JudgeDashboard = () => {
   const { user, logout } = useAuth();
@@ -14,6 +15,12 @@ const JudgeDashboard = () => {
   const [assignedEvents, setAssignedEvents] = useState([]);
   const [assignedSubmissions, setAssignedSubmissions] = useState([]);
   const [loadingAssigned, setLoadingAssigned] = useState(false);
+  const [showLeaderboardForEvent, setShowLeaderboardForEvent] = useState(false);
+  const [leaderboardEvent, setLeaderboardEvent] = useState(null);
+  const [allReviews, setAllReviews] = useState([]);
+  const [eventAverages, setEventAverages] = useState({}); // eventId -> { avg, reviewedCount, teamCount }
+  const [judgeReviewCount, setJudgeReviewCount] = useState(0);
+  const [judgeAverageScore, setJudgeAverageScore] = useState(null);
 
   // Apply theme to root element
   useEffect(() => {
@@ -92,7 +99,7 @@ const JudgeDashboard = () => {
       if (!user?.email) return;
       setLoadingAssigned(true);
       try {
-        const [evRes, subRes] = await Promise.all([fetch('/api/events'), fetch('/api/submissions')]);
+        const [evRes, subRes, revRes] = await Promise.all([fetch('/api/events'), fetch('/api/submissions'), fetch('/api/reviews')]);
         if (!evRes.ok || !subRes.ok) {
           setAssignedEvents([]);
           setAssignedSubmissions([]);
@@ -101,6 +108,9 @@ const JudgeDashboard = () => {
         }
         const events = await evRes.json();
         const subs = await subRes.json();
+        const revs = revRes.ok ? await revRes.json() : [];
+        if (!mounted) return;
+        setAllReviews(Array.isArray(revs) ? revs : []);
         const email = (user.email || '').toLowerCase();
         const assigned = (events || []).filter(ev => Array.isArray(ev.authorizedJudges) && ev.authorizedJudges.map(a => String(a).toLowerCase()).includes(email));
         const assignedIds = new Set(assigned.map(e => e.id || e.eventCode || e.event_code));
@@ -108,6 +118,55 @@ const JudgeDashboard = () => {
         if (!mounted) return;
         setAssignedEvents(assigned);
         setAssignedSubmissions(Array.isArray(assignedSubs) ? assignedSubs : []);
+
+        // Compute per-event averages: average of team averages for submissions in that event
+        try {
+          const bySubmission = {};
+          (revs || []).forEach(r => {
+            const sid = String(r.submission_id || r.submissionId || r.submission);
+            if (!bySubmission[sid]) bySubmission[sid] = { total: 0, count: 0 };
+            const score = typeof r.score === 'number' ? r.score : (r.score ? Number(r.score) : 0);
+            bySubmission[sid].total += score;
+            bySubmission[sid].count += 1;
+          });
+
+          const evAgg = {};
+          (assigned || []).forEach(ev => {
+            const evId = ev.id || ev.eventCode || ev.event_code;
+            const subsForEv = (subs || []).filter(s => String(s.event_id || s.eventId || s.event || s.event_code || s.eventCode) === String(evId));
+            const teamAvgs = subsForEv.map(s => {
+              const sid = String(s.id);
+              const agg = bySubmission[sid];
+              return agg && agg.count > 0 ? (agg.total / agg.count) : null;
+            }).filter(v => v !== null);
+            const teamCount = subsForEv.length;
+            const reviewedCount = teamAvgs.length;
+            const avgOfTeams = teamAvgs.length > 0 ? (teamAvgs.reduce((a,b) => a + b, 0) / teamAvgs.length) : null;
+            evAgg[String(evId)] = { avg: avgOfTeams, reviewedCount, teamCount };
+          });
+          setEventAverages(evAgg);
+        } catch (err) {
+          console.warn('Failed to compute event averages', err);
+          setEventAverages({});
+        }
+
+        // Compute judge-specific stats
+        try {
+          const judgeEmail = (user.email || '').toLowerCase();
+          const judgeReviews = (revs || []).filter(r => String(r.reviewer_email || r.reviewerEmail || r.reviewer) === judgeEmail || String((r.reviewer_email || r.reviewerEmail || r.reviewer || '')).toLowerCase() === judgeEmail);
+          const jCount = judgeReviews.length;
+          let jTotal = 0; let jC = 0;
+          judgeReviews.forEach(r => {
+            const s = typeof r.score === 'number' ? r.score : (r.score ? Number(r.score) : null);
+            if (s !== null && !Number.isNaN(s)) { jTotal += s; jC += 1; }
+          });
+          setJudgeReviewCount(jCount);
+          setJudgeAverageScore(jC > 0 ? (jTotal / jC) : null);
+        } catch (err) {
+          console.warn('Failed to compute judge stats', err);
+          setJudgeReviewCount(0);
+          setJudgeAverageScore(null);
+        }
       } catch (err) {
         console.error('Failed to load judge assignments', err);
         if (mounted) {
@@ -376,7 +435,7 @@ const JudgeDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-primary opacity-60 text-sm">Completed Reviews</p>
-                  <p className="text-3xl font-black text-primary">{/* derivable from submissions with scores; placeholder */}0</p>
+                  <p className="text-3xl font-black text-primary">{judgeReviewCount}</p>
                 </div>
                 <Trophy className="w-8 h-8 text-accent" />
               </div>
@@ -385,8 +444,8 @@ const JudgeDashboard = () => {
             <div className="dashboard-card-white p-6 rounded-2xl border-2 border-themed">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-primary opacity-60 text-sm">Average Score</p>
-                  <p className="text-3xl font-black text-primary">-</p>
+                  <p className="text-primary opacity-60 text-sm">Average Score (You)</p>
+                  <p className="text-3xl font-black text-primary">{judgeAverageScore !== null ? judgeAverageScore.toFixed(1) : '-'}</p>
                 </div>
                 <BarChart3 className="w-8 h-8 text-accent" />
               </div>
@@ -411,9 +470,11 @@ const JudgeDashboard = () => {
                           <div>
                             <div className="font-bold text-primary">{ev.eventTitle || ev.name || ev.eventCode}</div>
                             <div className="text-xs text-primary opacity-60">Code: {ev.eventCode}</div>
+                            <div className="text-xs text-primary opacity-70 mt-1">Event Avg: {eventAverages[String(ev.id || ev.eventCode || ev.event_code)] && eventAverages[String(ev.id || ev.eventCode || ev.event_code)].avg !== null ? eventAverages[String(ev.id || ev.eventCode || ev.event_code)].avg.toFixed(1) : '-' } • Reviewed Teams: {eventAverages[String(ev.id || ev.eventCode || ev.event_code)] ? eventAverages[String(ev.id || ev.eventCode || ev.event_code)].reviewedCount : 0}/{eventAverages[String(ev.id || ev.eventCode || ev.event_code)] ? eventAverages[String(ev.id || ev.eventCode || ev.event_code)].teamCount : '-'}</div>
                           </div>
-                          <div>
+                          <div className="flex items-center gap-2">
                             <button onClick={() => handleOpenEvaluateForEvent(ev)} className="btn-primary px-3 py-1 rounded-lg border-2">Evaluate</button>
+                            <button onClick={() => { setLeaderboardEvent(ev); setShowLeaderboardForEvent(true); }} className="btn-secondary px-3 py-1 rounded-lg border-2">View Leaderboard</button>
                           </div>
                         </div>
                       ))}
@@ -426,6 +487,13 @@ const JudgeDashboard = () => {
 
           {/* Removed static stats and recent evaluations; dashboard now shows only dynamic data for assigned events/submissions. */}
         </main>
+        {/* Leaderboard modal for judge */}
+        {showLeaderboardForEvent && leaderboardEvent && (
+          <Leaderboard
+            event={leaderboardEvent}
+            onClose={() => { setShowLeaderboardForEvent(false); setLeaderboardEvent(null); }}
+          />
+        )}
       </div>
     </>
   );
