@@ -92,10 +92,28 @@ const ParticipantDashboard = () => {
     const fetchRegistrations = async () => {
       if (!user || !user.email) return;
       try {
-        const url = `/api/registrations?email=${encodeURIComponent(user.email)}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Failed to fetch registrations');
-        const data = await res.json();
+        const apiBase = import.meta.env.VITE_API_BASE || '';
+        const encoded = encodeURIComponent(user.email);
+        // Try configured API base first (if set), then relative proxy, then localhost
+        const urls = [];
+        if (apiBase) urls.push(`${apiBase.replace(/\/$/, '')}/api/registrations?email=${encoded}`);
+        urls.push(`/api/registrations?email=${encoded}`);
+        urls.push(`http://localhost:4000/api/registrations?email=${encoded}`);
+
+        let data = null;
+        for (const url of urls) {
+          try {
+            console.log(`Attempting to fetch registrations from: ${url}`);
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+            data = await res.json();
+            break;
+          } catch (e) {
+            console.warn(`Failed to load registrations from ${url}:`, e);
+            // try next
+          }
+        }
+        if (!data) throw new Error('Failed to fetch registrations from all URLs');
         if (!mounted || !Array.isArray(data)) return;
 
         const mapped = data.map(r => {
@@ -232,8 +250,12 @@ const ParticipantDashboard = () => {
   useEffect(() => {
     let mounted = true;
     const loadEvents = async () => {
-      // Try proxy first, then direct backend as fallback
-      const urls = ['/api/events', 'http://localhost:4000/api/events'];
+  // Prefer configured backend (VITE_API_BASE) first, then proxy relative path, then localhost fallback
+  const apiBase = import.meta.env.VITE_API_BASE || '';
+  const urls = [];
+  if (apiBase) urls.push(`${apiBase.replace(/\/$/, '')}/api/events`);
+  urls.push('/api/events');
+  urls.push('http://localhost:4000/api/events');
       
       for (const url of urls) {
         try {
@@ -352,7 +374,8 @@ const ParticipantDashboard = () => {
     (async () => {
       try {
         const endpointId = eventData.id || eventData.eventCode || newRegisteredEvent.id;
-        const res = await fetch(`/api/events/${encodeURIComponent(endpointId)}/register`, {
+  const apiBase = import.meta.env.VITE_API_BASE || '';
+  const res = await fetch(`${apiBase.replace(/\/$/, '')}/api/events/${encodeURIComponent(endpointId)}/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ registrantEmail: user.email, registrantName: user.name, teamName: teamInfo?.teamName || null, registrants: teamInfo?.members || null })
@@ -441,7 +464,9 @@ const ParticipantDashboard = () => {
 
     const url = `${apiBase.replace(/\/$/, '')}/api/events/${encodeURIComponent(eventId)}/submissions`;
     try {
-      const res = await fetch(url, {
+    const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+    const url = `${apiBase.replace(/\/$/, '')}/api/events/${encodeURIComponent(eventId)}/submissions`;
+    const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
