@@ -536,7 +536,7 @@ Grind_Synap3.0/
 
 ## 🔗 Important Links
 
-- **🌐 Live Demo**: [grind-synap.vercel.app](https://grind-synap3-0-kappa.vercel.app/)
+- **🌐 Live Demo**: [https://grind-synap3-0-kappa.vercel.app/](https://grind-synap3-0-kappa.vercel.app/)
 - **📚 Documentation**: [docs.grind-synap.com](https://docs.grind-synap.com)
 - **🐛 Bug Reports**: [GitHub Issues](https://github.com/fredrick-nadar/Grind_Synap3.0/issues)
 - **💬 Community**: [Discord Server](https://discord.gg/grind-synap)
